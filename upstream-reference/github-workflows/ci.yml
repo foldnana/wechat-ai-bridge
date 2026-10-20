@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "docs/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Shared setup anchor ────────────────────────────────────────────────────
+  # Every job repeats checkout + pnpm install; the pnpm store cache is shared
+  # across jobs so the install step is fast after the first run.
+
+  # ── Typecheck ──────────────────────────────────────────────────────────────
+  typecheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        env:
+          NEXU_SKIP_RUNTIME_POSTINSTALL: "1"
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+  # ── Lint ───────────────────────────────────────────────────────────────────
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        env:
+          NEXU_SKIP_RUNTIME_POSTINSTALL: "1"
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+  # ── Test ──────────────────────────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        env:
+          NEXU_SKIP_RUNTIME_POSTINSTALL: "1"
+        run: pnpm install --frozen-lockfile
+
+      - name: Test with coverage
+        run: pnpm test:coverage
+
+      - name: Upload unit coverage to Codecov
+        if: ${{ !cancelled() && hashFiles('coverage/lcov.info') != '' }}
+        uses: codecov/codecov-action@v6
+        with:
+          use_oidc: true
+          disable_search: true
+          files: coverage/lcov.info
+          flags: unit
+          name: unit-${{ github.run_id }}-${{ github.run_attempt }}
+          fail_ci_if_error: false
+          verbose: true
+
+  # ── slimclaw runtime-seed lockfile sync ────────────────────────────────────
+  slimclaw-runtime-seed-lockfile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify slimclaw runtime-seed lockfile is in sync
+        run: corepack npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: packages/slimclaw/runtime-seed
+
+  # ── Build + ESM check ─────────────────────────────────────────────────────
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        env:
+          NEXU_SKIP_RUNTIME_POSTINSTALL: "1"
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Verify ESM import specifiers
+        run: pnpm check:esm-imports

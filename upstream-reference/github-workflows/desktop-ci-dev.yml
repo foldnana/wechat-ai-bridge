@@ -1,0 +1,191 @@
+name: Desktop CI Dev
+
+on:
+  pull_request:
+    paths:
+      - 'apps/desktop/**'
+      - 'apps/controller/**'
+      - 'apps/web/**'
+      - 'packages/shared/**'
+      - 'packages/slimclaw/**'
+      - 'tests/desktop/**'
+      - 'scripts/dev-launchd.sh'
+      - 'tools/dev/**'
+      - 'scripts/desktop-check-dev.sh'
+      - 'scripts/desktop-stop-smoke.sh'
+      - 'scripts/desktop-ci-check.mjs'
+      - 'scripts/launchd-lifecycle-e2e.sh'
+      - 'scripts/kill-all.sh'
+      - 'vitest.config.ts'
+      - 'tsconfig.base.json'
+      - 'scripts/postinstall.mjs'
+      - '.npmrc'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/desktop-ci-dev.yml'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/desktop/**'
+      - 'apps/controller/**'
+      - 'apps/web/**'
+      - 'packages/shared/**'
+      - 'packages/slimclaw/**'
+      - 'tests/desktop/**'
+      - 'scripts/dev-launchd.sh'
+      - 'tools/dev/**'
+      - 'scripts/desktop-check-dev.sh'
+      - 'scripts/desktop-stop-smoke.sh'
+      - 'scripts/desktop-ci-check.mjs'
+      - 'scripts/launchd-lifecycle-e2e.sh'
+      - 'scripts/kill-all.sh'
+      - 'vitest.config.ts'
+      - 'tsconfig.base.json'
+      - 'scripts/postinstall.mjs'
+      - '.npmrc'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/desktop-ci-dev.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-ci-dev-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop-ci:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos
+            runs_on: macos-14
+          - os: windows
+            runs_on: windows-latest
+
+    runs-on: ${{ matrix.runs_on }}
+    timeout-minutes: 45
+    env:
+      LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+      LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+      LANGFUSE_BASE_URL: ${{ secrets.LANGFUSE_BASE_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Restore npm cache for runtime installs
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: desktop-npm-cache-${{ runner.os }}-arm64-${{ hashFiles('packages/slimclaw/runtime-seed/package-lock.json', 'apps/controller/static/runtime-plugins/openclaw-weixin/package-lock.json') }}
+          restore-keys: |
+            desktop-npm-cache-${{ runner.os }}-arm64-
+            desktop-npm-cache-${{ runner.os }}-
+
+      - name: Restore Electron build caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            apps/desktop/.cache
+          key: desktop-electron-cache-${{ runner.os }}-arm64-${{ hashFiles('pnpm-lock.yaml', 'apps/desktop/package.json') }}
+          restore-keys: |
+            desktop-electron-cache-${{ runner.os }}-arm64-
+            desktop-electron-cache-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install tmux
+        if: matrix.os == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install tmux
+
+      - name: Show desktop toolchain versions
+        shell: pwsh
+        run: |
+          pnpm exec electron --version
+          if ("${{ matrix.os }}" -eq "macos") {
+            tmux -V
+          }
+
+      - name: Build all
+        run: pnpm build
+
+      - name: Run unit tests (includes real launchd integration tests on macOS)
+        run: pnpm test
+
+      - name: Launchd lifecycle e2e test
+        shell: bash
+        run: bash scripts/launchd-lifecycle-e2e.sh
+
+      - name: Verify desktop runtime unit health
+        if: matrix.os == 'macos'
+        env:
+          NEXU_DESKTOP_CHECK_CAPTURE_DIR: ${{ runner.temp }}/desktop-ci
+          NEXU_USE_LAUNCHD: "0"
+        run: pnpm check:dev
+
+      - name: Verify Windows desktop build pipeline
+        if: matrix.os == 'windows'
+        run: pnpm --filter @nexu/desktop build
+
+      - name: Capture desktop logs
+        if: always()
+        shell: pwsh
+        run: |
+          $captureDir = Join-Path $env:RUNNER_TEMP "desktop-ci"
+          New-Item -ItemType Directory -Force -Path $captureDir | Out-Null
+          if (Test-Path ".tmp/dev/logs") {
+            Copy-Item ".tmp/dev/logs" (Join-Path $captureDir "repo-logs") -Recurse -Force
+          }
+          if (Test-Path ".tmp/desktop/electron/logs") {
+            Copy-Item ".tmp/desktop/electron/logs" (Join-Path $captureDir "electron-logs") -Recurse -Force
+          }
+
+      - name: Capture tmux log
+        if: always() && matrix.os == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/desktop-ci"
+          if [ -d .tmp/dev/logs ]; then
+            cp -R .tmp/dev/logs "$RUNNER_TEMP/desktop-ci/repo-logs"
+          fi
+          if [ -d .tmp/desktop/electron/logs ]; then
+            cp -R .tmp/desktop/electron/logs "$RUNNER_TEMP/desktop-ci/electron-logs"
+          fi
+          if command -v tmux >/dev/null 2>&1 && tmux has-session -t nexu-desktop 2>/dev/null; then
+            tmux capture-pane -pt nexu-desktop -S -400 > "$RUNNER_TEMP/desktop-ci/tmux.log"
+          fi
+
+      - name: Upload desktop logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-ci-logs-${{ matrix.os }}
+          path: ${{ runner.temp }}/desktop-ci
+          if-no-files-found: warn
+          retention-days: 7

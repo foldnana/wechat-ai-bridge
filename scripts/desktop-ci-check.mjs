@@ -1,0 +1,1337 @@
+import { spawn } from "node:child_process";
+import { constants as fsConstants } from "node:fs";
+import { access, cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+
+const repoRoot = process.cwd();
+const maxHealthAttemptsByMode = {
+  dev: 60,
+  dist: 90,
+};
+const probeTimeoutMs = 5_000;
+const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+
+function getRequiredDiagnosticsUnitIds(mode) {
+  return mode === "dev" ? ["openclaw"] : ["controller", "openclaw"];
+}
+
+function createCommandSpec(command, args) {
+  if (
+    process.platform === "win32" &&
+    (command === "pnpm" || command === "pnpm.cmd")
+  ) {
+    return {
+      command: "cmd.exe",
+      args: ["/d", "/s", "/c", ["pnpm", ...args].join(" ")],
+    };
+  }
+
+  return { command, args };
+}
+
+function parseArgs(argv) {
+  const [mode, ...rest] = argv;
+
+  if (!mode || (mode !== "dev" && mode !== "dist")) {
+    throw new Error(
+      "Usage: node scripts/desktop-ci-check.mjs <dev|dist> [--capture-dir <path>]",
+    );
+  }
+
+  let captureDir = null;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (arg === "--capture-dir") {
+      captureDir = rest[index + 1] ? resolve(repoRoot, rest[index + 1]) : null;
+      index += 1;
+      continue;
+    }
+
+    throw new Error(`Unknown argument: ${arg}`);
+  }
+
+  return { mode, captureDir };
+}
+
+function sleep(ms) {
+  return new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
+}
+
+function compactPaths(paths) {
+  return [...new Set(paths.filter(Boolean))];
+}
+
+function readNumberEnv(name, fallback) {
+  const value = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function getPortConfig(mode) {
+  return {
+    controllerPort: readNumberEnv(
+      mode === "dev" ? "NEXU_DEV_CONTROLLER_PORT" : "NEXU_CONTROLLER_PORT",
+      50800,
+    ),
+    webPort: readNumberEnv(
+      mode === "dev" ? "NEXU_DEV_WEB_PORT" : "NEXU_WEB_PORT",
+      50810,
+    ),
+    openclawPort: readNumberEnv(
+      mode === "dev" ? "NEXU_DEV_OPENCLAW_PORT" : "NEXU_OPENCLAW_PORT",
+      18789,
+    ),
+  };
+}
+
+function getReadinessUrls(mode, portConfig) {
+  const controllerUrl =
+    process.env[
+      mode === "dev" ? "NEXU_DEV_CONTROLLER_URL" : "NEXU_CONTROLLER_URL"
+    ] ?? `http://127.0.0.1:${portConfig.controllerPort}`;
+  const webUrl =
+    process.env[mode === "dev" ? "NEXU_DEV_WEB_URL" : "NEXU_WEB_URL"] ??
+    `http://127.0.0.1:${portConfig.webPort}`;
+  const openclawBaseUrl =
+    process.env[
+      mode === "dev" ? "NEXU_DEV_OPENCLAW_BASE_URL" : "NEXU_OPENCLAW_BASE_URL"
+    ] ?? `http://127.0.0.1:${portConfig.openclawPort}`;
+
+  return {
+    api: `${controllerUrl}/api/internal/desktop/ready`,
+    web: `${webUrl}/api/internal/desktop/ready`,
+    webSurface: `${webUrl}/workspace`,
+    webOrigin: safeUrlOrigin(webUrl) ?? webUrl,
+    openclawHealth: `${openclawBaseUrl}/health`,
+  };
+}
+
+function getRuntimePortsCandidatePaths(mode) {
+  if (mode !== "dist") {
+    return [];
+  }
+
+  return compactPaths([
+    process.env.NEXU_RUNTIME_PORTS_PATH
+      ? resolve(process.env.NEXU_RUNTIME_PORTS_PATH)
+      : null,
+    resolve(homedir(), "Library", "LaunchAgents", "runtime-ports.json"),
+  ]);
+}
+
+function isRuntimePortsMetadata(value) {
+  return (
+    isRecord(value) &&
+    (typeof value.controllerPort === "number" ||
+      value.controllerPort == null) &&
+    (typeof value.webPort === "number" || value.webPort == null) &&
+    (typeof value.openclawPort === "number" || value.openclawPort == null)
+  );
+}
+
+async function readRuntimePortsMetadata(paths) {
+  const result = await readFirstExistingJson(paths);
+  const metadata = isRuntimePortsMetadata(result.content)
+    ? result.content
+    : null;
+
+  return {
+    filePath: result.filePath,
+    metadata,
+  };
+}
+
+async function resolvePortConfig(context) {
+  if (context.mode !== "dist") {
+    return {
+      portConfig: context.portConfig,
+      runtimePorts: null,
+    };
+  }
+
+  const runtimePorts = await readRuntimePortsMetadata(
+    context.runtimePortsFiles,
+  );
+
+  return {
+    portConfig: {
+      controllerPort:
+        runtimePorts.metadata?.controllerPort ??
+        context.portConfig.controllerPort,
+      webPort: runtimePorts.metadata?.webPort ?? context.portConfig.webPort,
+      openclawPort:
+        runtimePorts.metadata?.openclawPort ?? context.portConfig.openclawPort,
+    },
+    runtimePorts,
+  };
+}
+
+function safeUrlOrigin(url) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+function isBrowserControlRequired() {
+  const value = process.env.NEXU_DESKTOP_CHECK_REQUIRE_BROWSER_CONTROL;
+
+  if (value === undefined) {
+    return true;
+  }
+
+  return value === "1" || value.toLowerCase() === "true";
+}
+
+function createCheckContext(mode) {
+  const portConfig = getPortConfig(mode);
+
+  if (mode === "dev") {
+    const desktopRoot = resolve(repoRoot, ".tmp/desktop/electron");
+    const desktopUserDataRoot = resolve(desktopRoot, "user-data");
+    const desktopLogsDir = resolve(desktopUserDataRoot, "logs");
+    const runtimeUnitLogsDir = resolve(desktopLogsDir, "runtime-units");
+
+    return {
+      mode,
+      statusCommand: [pnpmCommand, ["dev", "status"]],
+      ports: [
+        { unit: "controller", port: portConfig.controllerPort },
+        { unit: "web", port: portConfig.webPort },
+      ],
+      readinessUrls: getReadinessUrls(mode, portConfig),
+      processChecks: {
+        lockFile: resolve(repoRoot, ".tmp/dev/desktop.pid"),
+        pidKey: "pid",
+      },
+      diagnosticsFiles: [resolve(desktopLogsDir, "desktop-diagnostics.json")],
+      logs: {
+        coldStart: [resolve(desktopLogsDir, "cold-start.log")],
+        desktopMain: [resolve(desktopLogsDir, "desktop-main.log")],
+        controller: compactPaths([
+          resolve(runtimeUnitLogsDir, "controller.log"),
+          resolve(runtimeUnitLogsDir, "api.log"),
+        ]),
+        web: [resolve(runtimeUnitLogsDir, "web.log")],
+        openclaw: compactPaths([
+          resolve(runtimeUnitLogsDir, "openclaw.log"),
+          resolve(runtimeUnitLogsDir, "gateway.log"),
+        ]),
+      },
+      capturePaths: [
+        { source: resolve(repoRoot, ".tmp/dev/logs"), target: "repo-logs" },
+        { source: desktopLogsDir, target: "electron-logs" },
+      ],
+      portConfig,
+      runtimePortsFiles: [],
+    };
+  }
+
+  const packagedLogsDir = process.env.PACKAGED_LOGS_DIR;
+  const packagedRuntimeLogsDir = process.env.PACKAGED_RUNTIME_LOGS_DIR;
+
+  if (!packagedLogsDir || !packagedRuntimeLogsDir) {
+    throw new Error(
+      "Dist mode requires PACKAGED_LOGS_DIR and PACKAGED_RUNTIME_LOGS_DIR environment variables.",
+    );
+  }
+
+  return {
+    mode,
+    statusCommand: null,
+    ports: [
+      { unit: "controller", port: portConfig.controllerPort },
+      { unit: "web", port: portConfig.webPort },
+    ],
+    readinessUrls: getReadinessUrls(mode, portConfig),
+    processChecks: {
+      pidFile: process.env.NEXU_DESKTOP_PACKAGED_PID_PATH ?? null,
+    },
+    diagnosticsFiles: compactPaths([
+      resolve(packagedLogsDir, "desktop-diagnostics.json"),
+      process.env.DEFAULT_LOGS_DIR
+        ? resolve(process.env.DEFAULT_LOGS_DIR, "desktop-diagnostics.json")
+        : null,
+    ]),
+    logs: {
+      coldStart: compactPaths([
+        resolve(packagedLogsDir, "cold-start.log"),
+        process.env.DEFAULT_LOGS_DIR
+          ? resolve(process.env.DEFAULT_LOGS_DIR, "cold-start.log")
+          : null,
+      ]),
+      desktopMain: compactPaths([
+        resolve(packagedLogsDir, "desktop-main.log"),
+        process.env.DEFAULT_LOGS_DIR
+          ? resolve(process.env.DEFAULT_LOGS_DIR, "desktop-main.log")
+          : null,
+      ]),
+      controller: compactPaths([
+        resolve(packagedRuntimeLogsDir, "controller.log"),
+        resolve(packagedRuntimeLogsDir, "api.log"),
+        process.env.DEFAULT_RUNTIME_LOGS_DIR
+          ? resolve(process.env.DEFAULT_RUNTIME_LOGS_DIR, "controller.log")
+          : null,
+        process.env.DEFAULT_RUNTIME_LOGS_DIR
+          ? resolve(process.env.DEFAULT_RUNTIME_LOGS_DIR, "api.log")
+          : null,
+      ]),
+      web: compactPaths([
+        resolve(packagedRuntimeLogsDir, "web.log"),
+        process.env.DEFAULT_RUNTIME_LOGS_DIR
+          ? resolve(process.env.DEFAULT_RUNTIME_LOGS_DIR, "web.log")
+          : null,
+      ]),
+      openclaw: compactPaths([
+        resolve(packagedRuntimeLogsDir, "openclaw.log"),
+        resolve(packagedRuntimeLogsDir, "gateway.log"),
+        process.env.DEFAULT_RUNTIME_LOGS_DIR
+          ? resolve(process.env.DEFAULT_RUNTIME_LOGS_DIR, "openclaw.log")
+          : null,
+        process.env.DEFAULT_RUNTIME_LOGS_DIR
+          ? resolve(process.env.DEFAULT_RUNTIME_LOGS_DIR, "gateway.log")
+          : null,
+      ]),
+    },
+    capturePaths: [
+      { source: packagedLogsDir, target: "packaged-logs" },
+      { source: packagedRuntimeLogsDir, target: "runtime-unit-logs" },
+      ...(process.env.DEFAULT_LOGS_DIR
+        ? [
+            {
+              source: resolve(process.env.DEFAULT_LOGS_DIR),
+              target: "default-logs",
+            },
+          ]
+        : []),
+      ...(process.env.DEFAULT_RUNTIME_LOGS_DIR
+        ? [
+            {
+              source: resolve(process.env.DEFAULT_RUNTIME_LOGS_DIR),
+              target: "default-runtime-unit-logs",
+            },
+          ]
+        : []),
+    ],
+    portConfig,
+    runtimePortsFiles: getRuntimePortsCandidatePaths(mode),
+  };
+}
+
+async function runCommand(command, args) {
+  await new Promise((resolvePromise, rejectPromise) => {
+    const commandSpec = createCommandSpec(command, args);
+    const child = spawn(commandSpec.command, commandSpec.args, {
+      cwd: repoRoot,
+      env: process.env,
+      stdio: "inherit",
+    });
+
+    child.on("error", rejectPromise);
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolvePromise();
+        return;
+      }
+
+      rejectPromise(
+        new Error(
+          `Command failed: ${command} ${args.join(" ")} (exit ${code ?? "null"})`,
+        ),
+      );
+    });
+  });
+}
+
+async function fileExists(filePath) {
+  try {
+    await access(filePath, fsConstants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readLogIfExists(filePath) {
+  if (!filePath) {
+    return null;
+  }
+
+  if (!(await fileExists(filePath))) {
+    return null;
+  }
+
+  return readFile(filePath, "utf8");
+}
+
+async function readJsonIfExists(filePath) {
+  if (!filePath) {
+    return null;
+  }
+
+  if (!(await fileExists(filePath))) {
+    return null;
+  }
+
+  try {
+    const content = await readFile(filePath, "utf8");
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
+
+async function firstExistingPath(paths) {
+  for (const filePath of paths) {
+    if (await fileExists(filePath)) {
+      return filePath;
+    }
+  }
+
+  return paths[0] ?? null;
+}
+
+async function readFirstExistingLog(paths) {
+  const filePath = await firstExistingPath(paths);
+  return {
+    filePath,
+    content: filePath ? await readLogIfExists(filePath) : null,
+  };
+}
+
+async function readFirstExistingJson(paths) {
+  const filePath = await firstExistingPath(paths);
+  return {
+    filePath,
+    content: filePath ? await readJsonIfExists(filePath) : null,
+  };
+}
+
+async function isPortListening(port) {
+  if (process.platform === "win32") {
+    return new Promise((resolvePromise, rejectPromise) => {
+      const child = spawn("netstat", ["-ano", "-p", "tcp"], {
+        cwd: repoRoot,
+        env: process.env,
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+
+      const chunks = [];
+      child.stdout.on("data", (chunk) => chunks.push(chunk));
+      child.on("error", rejectPromise);
+      child.on("exit", (code) => {
+        if (code !== 0) {
+          resolvePromise(false);
+          return;
+        }
+
+        const output = Buffer.concat(chunks).toString("utf8");
+        const lines = output.split(/\r?\n/u);
+        const listening = lines.some((line) => {
+          const normalized = line.trim().replace(/\s+/gu, " ");
+          return (
+            normalized.includes(`:${String(port)} `) &&
+            normalized.includes(" LISTENING ")
+          );
+        });
+        resolvePromise(listening);
+      });
+    });
+  }
+
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn("lsof", [`-iTCP:${String(port)}`, "-sTCP:LISTEN"], {
+      cwd: repoRoot,
+      env: process.env,
+      stdio: "ignore",
+    });
+
+    child.on("error", rejectPromise);
+    child.on("exit", (code) => resolvePromise(code === 0));
+  });
+}
+
+function isPidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readPidIfAlive(pidFile) {
+  if (!pidFile || !(await fileExists(pidFile))) {
+    return { alive: false, pid: null, detail: "pid file is missing" };
+  }
+
+  const pidValue = (await readFile(pidFile, "utf8")).trim();
+  const pid = Number.parseInt(pidValue, 10);
+
+  if (!Number.isInteger(pid)) {
+    return {
+      alive: false,
+      pid: null,
+      detail: `invalid pid value: ${pidValue}`,
+    };
+  }
+
+  return isPidAlive(pid)
+    ? { alive: true, pid, detail: `pid ${pid} is running` }
+    : { alive: false, pid, detail: `pid ${pid} is not running` };
+}
+
+async function readStatePidIfAlive(stateFile) {
+  if (!stateFile || !(await fileExists(stateFile))) {
+    return { alive: false, pid: null, detail: "state file is missing" };
+  }
+
+  let parsedState;
+  try {
+    parsedState = JSON.parse(await readFile(stateFile, "utf8"));
+  } catch {
+    return { alive: false, pid: null, detail: "state file is invalid JSON" };
+  }
+
+  const pid = parsedState?.electronPid;
+  if (!Number.isInteger(pid)) {
+    return {
+      alive: false,
+      pid: null,
+      detail: "state file does not contain a valid electronPid",
+    };
+  }
+
+  return isPidAlive(pid)
+    ? { alive: true, pid, detail: `pid ${pid} is running` }
+    : { alive: false, pid, detail: `pid ${pid} is not running` };
+}
+
+async function fetchText(url) {
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(probeTimeoutMs),
+    });
+    const body = await response.text();
+    return { ok: response.ok, status: response.status, body };
+  } catch (error) {
+    return {
+      ok: false,
+      status: null,
+      body: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function collectAppProcessResults(context) {
+  if (context.processChecks.lockFile) {
+    return {
+      mainProcess: await readJsonPidIfAlive(
+        context.processChecks.lockFile,
+        context.processChecks.pidKey ?? "pid",
+      ),
+      auxiliaryProcess: null,
+    };
+  }
+
+  if (context.processChecks.pidFile) {
+    return {
+      mainProcess: await readPidIfAlive(context.processChecks.pidFile),
+      auxiliaryProcess: null,
+    };
+  }
+
+  if (context.processChecks.stateFile) {
+    return {
+      mainProcess: await readStatePidIfAlive(context.processChecks.stateFile),
+      auxiliaryProcess: null,
+    };
+  }
+
+  return {
+    mainProcess: {
+      alive: false,
+      pid: null,
+      detail: "no desktop process check configured",
+    },
+    auxiliaryProcess: null,
+  };
+}
+
+async function readJsonPidIfAlive(filePath, pidKey) {
+  if (!filePath || !(await fileExists(filePath))) {
+    return { alive: false, pid: null, detail: "pid file is missing" };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(await readFile(filePath, "utf8"));
+  } catch {
+    return { alive: false, pid: null, detail: "pid file is invalid JSON" };
+  }
+
+  const pid = parsed?.[pidKey];
+  if (!Number.isInteger(pid)) {
+    return {
+      alive: false,
+      pid: null,
+      detail: `pid file does not contain a valid ${pidKey}`,
+    };
+  }
+
+  return isPidAlive(pid)
+    ? { alive: true, pid, detail: `pid ${pid} is running` }
+    : { alive: false, pid, detail: `pid ${pid} is not running` };
+}
+
+function buildMissingCheckSummary(missingChecks) {
+  return missingChecks
+    .map((entry) => ` - ${entry.unit} :: ${entry.detail}`)
+    .join("\n");
+}
+
+async function collectProbeResults(context) {
+  const { portConfig, runtimePorts } = await resolvePortConfig(context);
+  const readinessUrls = getReadinessUrls(context.mode, portConfig);
+  const portResults = await Promise.all(
+    context.ports.map(async ({ unit }) => {
+      const port =
+        portConfig[`${unit}Port`] ?? context.portConfig[`${unit}Port`];
+      return {
+        unit,
+        port,
+        listening: await isPortListening(port),
+      };
+    }),
+  );
+
+  const [apiReady, webReady, webSurface, openclawHealth] = await Promise.all([
+    fetchText(readinessUrls.api),
+    fetchText(readinessUrls.web),
+    fetchText(readinessUrls.webSurface),
+    fetchText(readinessUrls.openclawHealth),
+  ]);
+
+  const browserControlListening = await isPortListening(18791);
+  const appProcessResults = await collectAppProcessResults(context);
+
+  return {
+    portConfig,
+    readinessUrls,
+    runtimePorts,
+    portResults,
+    apiReady,
+    webReady,
+    webSurface,
+    openclawHealth,
+    browserControlListening,
+    appProcessResults,
+  };
+}
+
+function getDiagnosticsUnit(diagnostics, unitId) {
+  const units = diagnostics?.runtime?.state?.units;
+  if (!Array.isArray(units)) {
+    return null;
+  }
+
+  const match = units.find(
+    (unit) => isRuntimeUnitState(unit) && unit.id === unitId,
+  );
+  return isRuntimeUnitState(match) ? match : null;
+}
+
+function getExpectedUnitPort(unitId, portConfig) {
+  switch (unitId) {
+    case "controller":
+      return portConfig.controllerPort;
+    case "openclaw":
+      return portConfig.openclawPort;
+    case "web":
+      return portConfig.webPort;
+    default:
+      return null;
+  }
+}
+
+function diagnosticsUnitUsesExpectedPort(unit, unitId, portConfig) {
+  const expectedPort = getExpectedUnitPort(unitId, portConfig);
+
+  if (typeof expectedPort !== "number") {
+    return true;
+  }
+
+  return unit.port == null || unit.port === expectedPort;
+}
+
+// Locate the diagnostics entry for the embedded "web surface" webview that
+// the desktop shell mounts on top of the local web sidecar. The earlier
+// implementation looked for `lastUrl.includes("/workspace")`, but that
+// asserted *product state* (the user has reached the workspace route) rather
+// than runtime health: in fresh-state CI runs the renderer mounts /workspace,
+// then the SPA's AuthLayout / WorkspaceLayout immediately Navigate('/')
+// because there is no auth session and SETUP_COMPLETE_KEY is unset, and
+// because the diagnostics reporter records `contents.getURL()` at
+// did-finish-load time it captures the post-redirect URL.
+//
+// The runtime health invariant we actually care about is that *some* webview
+// successfully loaded a page from the local web sidecar's origin, i.e. the
+// embed handshake worked, the renderer is alive, and there was no fail-load.
+// We accept any path under that origin (root, /workspace, /welcome, ...).
+function getLatestWebSurfaceWebview(diagnostics, webOrigin) {
+  if (!Array.isArray(diagnostics?.embeddedContents)) {
+    return null;
+  }
+
+  if (typeof webOrigin !== "string" || webOrigin.length === 0) {
+    return null;
+  }
+
+  const webSurfaceEntries = diagnostics.embeddedContents.filter((entry) => {
+    if (!isRecord(entry)) return false;
+    if (entry.type !== "webview") return false;
+    if (typeof entry.lastUrl !== "string") return false;
+    try {
+      return new URL(entry.lastUrl).origin === webOrigin;
+    } catch {
+      return false;
+    }
+  });
+
+  if (webSurfaceEntries.length === 0) {
+    return null;
+  }
+
+  return webSurfaceEntries.reduce((latest, entry) => {
+    const latestEventAt =
+      typeof latest.lastEventAt === "string"
+        ? Date.parse(latest.lastEventAt)
+        : Number.NEGATIVE_INFINITY;
+    const entryEventAt =
+      typeof entry.lastEventAt === "string"
+        ? Date.parse(entry.lastEventAt)
+        : Number.NEGATIVE_INFINITY;
+
+    if (entryEventAt > latestEventAt) {
+      return entry;
+    }
+
+    if (entryEventAt < latestEventAt) {
+      return latest;
+    }
+
+    const latestId = typeof latest.id === "number" ? latest.id : -1;
+    const entryId = typeof entry.id === "number" ? entry.id : -1;
+    return entryId > latestId ? entry : latest;
+  });
+}
+
+function diagnosticsChecksPassed(diagnostics, webOrigin, portConfig) {
+  if (!isRecord(diagnostics)) {
+    return false;
+  }
+
+  const webSurfaceWebview = getLatestWebSurfaceWebview(diagnostics, webOrigin);
+  const requiredUnitsRunning = getRequiredDiagnosticsUnitIds(
+    diagnostics.isPackaged === true ? "dist" : "dev",
+  ).every((unitId) => {
+    const unit = getDiagnosticsUnit(diagnostics, unitId);
+    if (!unit) {
+      return false;
+    }
+    if (!diagnosticsUnitUsesExpectedPort(unit, unitId, portConfig)) {
+      return true;
+    }
+    return unit.phase === "running" && unit.lastError === null;
+  });
+
+  return (
+    diagnostics.coldStart?.status === "succeeded" &&
+    diagnostics.renderer?.didFinishLoad === true &&
+    diagnostics.renderer?.processGone?.seen !== true &&
+    webSurfaceWebview?.didFinishLoad === true &&
+    webSurfaceWebview?.processGone?.seen !== true &&
+    webSurfaceWebview?.lastError === null &&
+    requiredUnitsRunning
+  );
+}
+
+function probesPassed(results, diagnostics, webOrigin) {
+  return (
+    results.portResults.every((entry) => entry.listening) &&
+    results.apiReady.body.includes('"ready":true') &&
+    results.webReady.body.includes('"ready":true') &&
+    results.webSurface.body.includes('<div id="root"></div>') &&
+    results.openclawHealth.ok &&
+    (!isBrowserControlRequired() || results.browserControlListening) &&
+    results.appProcessResults.mainProcess.alive &&
+    (results.appProcessResults.tmuxSession?.alive ?? true) &&
+    diagnosticsChecksPassed(diagnostics, webOrigin, results.portConfig)
+  );
+}
+
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRuntimeUnitState(value) {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.phase === "string" &&
+    (typeof value.lastError === "string" || value.lastError === null) &&
+    (typeof value.port === "number" || value.port === null)
+  );
+}
+
+function collectDiagnosticsIssues(diagnostics, count) {
+  const entries = diagnostics?.runtime?.recentEvents;
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+
+  return entries
+    .filter(
+      (entry) =>
+        isRecord(entry) &&
+        typeof entry.ts === "string" &&
+        typeof entry.unitId === "string" &&
+        typeof entry.reasonCode === "string" &&
+        typeof entry.message === "string",
+    )
+    .map((entry) => {
+      const actionLabel =
+        typeof entry.actionId === "string" && entry.actionId.length > 0
+          ? ` [action=${entry.actionId}]`
+          : "";
+      return `${entry.ts} ${entry.unitId} [reason=${entry.reasonCode}]${actionLabel} ${entry.message}`;
+    })
+    .slice(-count);
+}
+
+function collectDiagnosticsFailures(diagnostics, webOrigin, portConfig) {
+  if (!isRecord(diagnostics)) {
+    return ["diagnostics file is unavailable"];
+  }
+
+  const failures = [];
+  const requiredDiagnosticsUnitIds = getRequiredDiagnosticsUnitIds(
+    diagnostics.isPackaged === true ? "dist" : "dev",
+  );
+
+  if (diagnostics.coldStart?.status !== "succeeded") {
+    failures.push(
+      `cold start status=${String(diagnostics.coldStart?.status ?? "unknown")}`,
+    );
+  }
+  if (diagnostics.renderer?.didFinishLoad !== true) {
+    failures.push("renderer did not finish load");
+  }
+  if (diagnostics.renderer?.processGone?.seen === true) {
+    failures.push(
+      `renderer process gone: ${String(diagnostics.renderer.processGone.reason ?? "unknown")}`,
+    );
+  }
+
+  const webSurfaceWebview = getLatestWebSurfaceWebview(diagnostics, webOrigin);
+  for (const unitId of requiredDiagnosticsUnitIds) {
+    const unit = getDiagnosticsUnit(diagnostics, unitId);
+    if (!unit) {
+      failures.push(`${unitId} runtime unit is missing from diagnostics`);
+      continue;
+    }
+
+    if (!diagnosticsUnitUsesExpectedPort(unit, unitId, portConfig)) {
+      continue;
+    }
+
+    if (unit.phase !== "running") {
+      failures.push(`${unitId} phase=${unit.phase}`);
+    }
+    if (unit.lastError) {
+      failures.push(`${unitId} lastError=${unit.lastError}`);
+    }
+  }
+
+  if (!webSurfaceWebview) {
+    failures.push(
+      `web surface webview diagnostics are missing (no embedded webview reported origin ${webOrigin})`,
+    );
+  } else {
+    if (webSurfaceWebview.didFinishLoad !== true) {
+      failures.push("web surface webview did not finish load");
+    }
+    if (webSurfaceWebview.processGone?.seen === true) {
+      failures.push(
+        `web surface webview process gone: ${String(webSurfaceWebview.processGone.reason ?? "unknown")}`,
+      );
+    }
+    if (typeof webSurfaceWebview.lastError === "string") {
+      failures.push(
+        `web surface webview lastError=${webSurfaceWebview.lastError}`,
+      );
+    }
+  }
+
+  return failures;
+}
+
+function formatDiagnosticsSnapshot(diagnostics) {
+  if (!diagnostics || !isRecord(diagnostics)) {
+    return ["diagnostics: unavailable"];
+  }
+
+  const lines = [];
+  const coldStart = diagnostics.coldStart;
+  const renderer = diagnostics.renderer;
+  const units = diagnostics?.runtime?.state?.units;
+
+  lines.push(
+    `updatedAt: ${typeof diagnostics.updatedAt === "string" ? diagnostics.updatedAt : "unknown"}`,
+  );
+
+  if (isRecord(coldStart)) {
+    const coldStartParts = [
+      `status=${typeof coldStart.status === "string" ? coldStart.status : "unknown"}`,
+      typeof coldStart.step === "string" && coldStart.step.length > 0
+        ? `step=${coldStart.step}`
+        : null,
+      typeof coldStart.error === "string" && coldStart.error.length > 0
+        ? `error=${coldStart.error}`
+        : null,
+    ].filter(Boolean);
+    lines.push(`coldStart: ${coldStartParts.join(", ")}`);
+  }
+
+  if (isRecord(renderer)) {
+    const rendererParts = [
+      `didFinishLoad=${String(renderer.didFinishLoad === true)}`,
+      typeof renderer.lastUrl === "string" && renderer.lastUrl.length > 0
+        ? `lastUrl=${renderer.lastUrl}`
+        : null,
+      typeof renderer.lastError === "string" && renderer.lastError.length > 0
+        ? `lastError=${renderer.lastError}`
+        : null,
+    ].filter(Boolean);
+
+    if (isRecord(renderer.processGone) && renderer.processGone.seen === true) {
+      rendererParts.push(
+        `processGone=${renderer.processGone.reason ?? "unknown"}/${String(renderer.processGone.exitCode ?? "null")}`,
+      );
+    }
+
+    lines.push(`renderer: ${rendererParts.join(", ")}`);
+  }
+
+  if (Array.isArray(diagnostics.embeddedContents)) {
+    const embeddedSummary = diagnostics.embeddedContents
+      .filter(isRecord)
+      .map((entry) => {
+        const parts = [
+          `${typeof entry.type === "string" ? entry.type : "unknown"}`,
+          `didFinishLoad=${String(entry.didFinishLoad === true)}`,
+          typeof entry.lastUrl === "string" ? `lastUrl=${entry.lastUrl}` : null,
+          typeof entry.lastError === "string"
+            ? `lastError=${entry.lastError}`
+            : null,
+          isRecord(entry.processGone) && entry.processGone.seen === true
+            ? `processGone=${String(entry.processGone.reason ?? "unknown")}/${String(entry.processGone.exitCode ?? "null")}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(",");
+        return `${String(entry.id ?? "unknown")}:${parts}`;
+      })
+      .join(" | ");
+
+    lines.push(`embedded: ${embeddedSummary || "none"}`);
+  }
+
+  if (Array.isArray(units)) {
+    const unitSummary = units
+      .filter(isRuntimeUnitState)
+      .map((unit) => {
+        const parts = [unit.phase];
+        if (unit.lastError) {
+          parts.push(`error=${unit.lastError}`);
+        }
+        if (typeof unit.port === "number") {
+          parts.push(`port=${String(unit.port)}`);
+        }
+        return `${unit.id}:${parts.join(",")}`;
+      })
+      .join(" | ");
+
+    lines.push(`units: ${unitSummary || "none"}`);
+  }
+
+  return lines;
+}
+
+function parseJsonLine(line) {
+  try {
+    return JSON.parse(line);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeLogEntry(parsed) {
+  if (!isRecord(parsed)) {
+    return null;
+  }
+
+  const runtimeAppLog = isRecord(parsed.runtime_app_log)
+    ? parsed.runtime_app_log
+    : null;
+  const topLevelMessage =
+    typeof parsed.msg === "string"
+      ? parsed.msg
+      : typeof parsed.message === "string"
+        ? parsed.message
+        : null;
+  const nestedMessage = runtimeAppLog
+    ? typeof runtimeAppLog.msg === "string"
+      ? runtimeAppLog.msg
+      : typeof runtimeAppLog.message === "string"
+        ? runtimeAppLog.message
+        : null
+    : null;
+  const level =
+    typeof parsed.level === "number"
+      ? parsed.level
+      : runtimeAppLog && typeof runtimeAppLog.level === "number"
+        ? runtimeAppLog.level
+        : null;
+
+  return {
+    level,
+    time:
+      typeof parsed.time === "string"
+        ? parsed.time
+        : runtimeAppLog && typeof runtimeAppLog.time === "string"
+          ? runtimeAppLog.time
+          : null,
+    unit:
+      typeof parsed.runtime_unit_id === "string"
+        ? parsed.runtime_unit_id
+        : typeof parsed.desktop_log_source === "string"
+          ? parsed.desktop_log_source
+          : null,
+    stream:
+      typeof parsed.runtime_log_stream === "string"
+        ? parsed.runtime_log_stream
+        : typeof parsed.desktop_log_stream === "string"
+          ? parsed.desktop_log_stream
+          : null,
+    reason:
+      typeof parsed.runtime_reason_code === "string"
+        ? parsed.runtime_reason_code
+        : typeof parsed.desktop_log_kind === "string"
+          ? parsed.desktop_log_kind
+          : null,
+    message: nestedMessage ?? topLevelMessage,
+    payload: runtimeAppLog ?? parsed,
+  };
+}
+
+function formatLevel(level) {
+  if (typeof level !== "number") {
+    return "LOG";
+  }
+  if (level >= 50) {
+    return "ERROR";
+  }
+  if (level >= 40) {
+    return "WARN";
+  }
+  return "INFO";
+}
+
+function summarizePayload(payload) {
+  if (!isRecord(payload)) {
+    return "";
+  }
+
+  const summaryEntries = [];
+  for (const [key, value] of Object.entries(payload)) {
+    if (
+      key === "level" ||
+      key === "time" ||
+      key === "msg" ||
+      key === "message" ||
+      key === "service" ||
+      key === "env" ||
+      key === "version"
+    ) {
+      continue;
+    }
+
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      summaryEntries.push(`${key}=${String(value)}`);
+      continue;
+    }
+
+    if (isRecord(value) && typeof value.message === "string") {
+      summaryEntries.push(`${key}.message=${value.message}`);
+    }
+  }
+
+  return summaryEntries.join(", ");
+}
+
+function collectReadableIssues(content, count) {
+  const issues = [];
+
+  for (const line of content.split(/\r?\n/)) {
+    if (!line.trim()) {
+      continue;
+    }
+
+    const parsed = parseJsonLine(line);
+    const entry = normalizeLogEntry(parsed);
+
+    if (!entry || typeof entry.level !== "number" || entry.level < 40) {
+      continue;
+    }
+
+    const summary = summarizePayload(entry.payload);
+    issues.push(
+      [
+        `[${formatLevel(entry.level)}]`,
+        entry.time ?? "unknown-time",
+        entry.unit ? `${entry.unit}` : null,
+        entry.reason ? `(${entry.reason})` : null,
+        entry.message ?? "<no message>",
+        summary ? `-- ${summary}` : null,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
+  }
+
+  return issues.slice(-count);
+}
+
+async function captureLogs(context, captureDir) {
+  if (!captureDir) {
+    return;
+  }
+
+  await mkdir(captureDir, { recursive: true });
+
+  for (const entry of context.capturePaths) {
+    if (!(await fileExists(entry.source))) {
+      continue;
+    }
+
+    try {
+      await cp(entry.source, join(captureDir, entry.target), {
+        recursive: true,
+        force: true,
+      });
+    } catch (err) {
+      if (err.code !== "ENOENT") throw err;
+      // Transient files (e.g. .tmp) may vanish between the existence
+      // check and the recursive copy — safe to ignore.
+    }
+  }
+
+  if (context.mode === "dev") {
+    const tmuxCapturePath = join(captureDir, "tmux.log");
+
+    await new Promise((resolvePromise) => {
+      const child = spawn(
+        "tmux",
+        ["capture-pane", "-pt", "nexu-desktop", "-S", "-400"],
+        {
+          cwd: repoRoot,
+          env: process.env,
+          stdio: ["ignore", "pipe", "ignore"],
+        },
+      );
+
+      const chunks = [];
+      child.stdout.on("data", (chunk) => chunks.push(chunk));
+      child.on("exit", async (code) => {
+        if (code === 0) {
+          await writeFile(tmuxCapturePath, Buffer.concat(chunks));
+        }
+        resolvePromise();
+      });
+      child.on("error", () => resolvePromise());
+    });
+  }
+}
+
+async function verifyRuntime(context) {
+  const maxHealthAttempts = maxHealthAttemptsByMode[context.mode];
+
+  if (context.statusCommand) {
+    await runCommand(context.statusCommand[0], context.statusCommand[1]);
+  }
+
+  for (let attempt = 1; attempt <= maxHealthAttempts; attempt += 1) {
+    console.log(`Runtime health attempt ${attempt}/${maxHealthAttempts}`);
+
+    const probeResults = await collectProbeResults(context);
+    const diagnosticsResult = await readFirstExistingJson(
+      context.diagnosticsFiles,
+    );
+    const diagnostics = diagnosticsResult.content;
+
+    if (
+      probesPassed(
+        probeResults,
+        diagnostics,
+        probeResults.readinessUrls.webOrigin,
+      )
+    ) {
+      break;
+    }
+
+    await sleep(2000);
+  }
+
+  const logResults = Object.fromEntries(
+    await Promise.all(
+      Object.entries(context.logs).map(async ([unit, paths]) => [
+        unit,
+        await readFirstExistingLog(paths),
+      ]),
+    ),
+  );
+  const contents = Object.fromEntries(
+    Object.entries(logResults).map(([unit, result]) => [unit, result.content]),
+  );
+  const diagnosticsResult = await readFirstExistingJson(
+    context.diagnosticsFiles,
+  );
+  const diagnostics = diagnosticsResult.content;
+  const probeResults = await collectProbeResults(context);
+
+  const missingChecks = [];
+  const addMissing = (unit, detail) => missingChecks.push({ unit, detail });
+
+  for (const { unit, port, listening } of probeResults.portResults) {
+    if (!listening) {
+      addMissing(unit, `port ${port} is not listening`);
+    }
+  }
+
+  if (!probeResults.apiReady.body.includes('"ready":true')) {
+    addMissing(
+      "controller",
+      `readiness endpoint body: ${probeResults.apiReady.body || "<no response>"}`,
+    );
+  }
+
+  if (!probeResults.webReady.body.includes('"ready":true')) {
+    addMissing(
+      "web",
+      `readiness endpoint body: ${probeResults.webReady.body || "<no response>"}`,
+    );
+  }
+
+  if (!probeResults.webSurface.body.includes('<div id="root"></div>')) {
+    addMissing("web", "root document did not contain app mount node");
+  }
+
+  if (isBrowserControlRequired() && !probeResults.browserControlListening) {
+    addMissing("openclaw", "browser control port 18791 is not listening");
+  }
+
+  if (!probeResults.appProcessResults.mainProcess.alive) {
+    addMissing(
+      context.mode === "dev" ? "desktop-shell" : "packaged-app",
+      probeResults.appProcessResults.mainProcess.detail,
+    );
+  }
+
+  if (!probeResults.openclawHealth.ok) {
+    addMissing(
+      "openclaw",
+      `health endpoint response: ${probeResults.openclawHealth.body || "<no response>"}`,
+    );
+  }
+
+  for (const detail of collectDiagnosticsFailures(
+    diagnostics,
+    probeResults.readinessUrls.webOrigin,
+    probeResults.portConfig,
+  )) {
+    addMissing("diagnostics", detail);
+  }
+
+  if (missingChecks.length === 0) {
+    console.log(
+      `${context.mode === "dev" ? "Desktop" : "Packaged"} runtime health verification passed.`,
+    );
+    return;
+  }
+
+  console.error(
+    `${context.mode === "dev" ? "Desktop" : "Packaged"} runtime health verification failed. Missing checks:\n${buildMissingCheckSummary(missingChecks)}`,
+  );
+  console.error("\nPersistent log files checked:");
+  for (const { filePath } of Object.values(logResults)) {
+    if (filePath) {
+      console.error(` - ${filePath}`);
+    }
+  }
+  if (diagnosticsResult.filePath) {
+    console.error(` - ${diagnosticsResult.filePath}`);
+  }
+
+  console.error("\n--- diagnostics snapshot ---");
+  for (const line of formatDiagnosticsSnapshot(diagnostics)) {
+    console.error(line);
+  }
+
+  const diagnosticsIssues = collectDiagnosticsIssues(diagnostics, 20);
+  if (diagnosticsIssues.length > 0) {
+    console.error("\n--- structured diagnostics recent events ---");
+    for (const issue of diagnosticsIssues) {
+      console.error(issue);
+    }
+  }
+
+  for (const [unit, content] of Object.entries(contents)) {
+    if (content === null) {
+      continue;
+    }
+
+    const readableIssues = collectReadableIssues(content, 20);
+    if (readableIssues.length === 0) {
+      continue;
+    }
+
+    console.error(
+      `\n--- ${logResults[unit].filePath} (warn/error entries) ---`,
+    );
+    for (const issue of readableIssues) {
+      console.error(issue);
+    }
+  }
+
+  process.exitCode = 1;
+}
+
+async function main() {
+  const { mode, captureDir } = parseArgs(process.argv.slice(2));
+  const context = createCheckContext(mode);
+
+  try {
+    await verifyRuntime(context);
+  } finally {
+    await captureLogs(context, captureDir);
+  }
+}
+
+await main();
