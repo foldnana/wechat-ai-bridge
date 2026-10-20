@@ -25,39 +25,6 @@ const desktopReadyResponseSchema = z.object({
   status: z.enum(["active", "starting", "degraded", "unhealthy"]),
 });
 
-const fallbackEventSchema = z.object({
-  id: z.string(),
-  receivedAt: z.string(),
-  channel: z.string(),
-  status: z.string(),
-  reasonCode: z.string().nullable(),
-  accountId: z.string().nullable(),
-  to: z.string().nullable(),
-  threadId: z.string().nullable(),
-  sessionKey: z.string().nullable(),
-  actionId: z.string().nullable(),
-  fallbackOutcome: z.enum(["sent", "skipped", "failed"]),
-  fallbackReason: z.string(),
-  error: z.string().nullable(),
-  sendResult: z
-    .object({
-      runId: z.string().optional(),
-      messageId: z.string().optional(),
-      channel: z.string().optional(),
-      chatId: z.string().optional(),
-      conversationId: z.string().optional(),
-    })
-    .nullable(),
-});
-
-const fallbackEventsResponseSchema = z.object({
-  events: z.array(fallbackEventSchema),
-});
-
-const fallbackEventsQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).optional(),
-});
-
 const desktopPreferencesResponseSchema = z.object({
   locale: z.enum(["en", "zh-CN"]).nullable(),
   analyticsEnabled: z.boolean(),
@@ -210,36 +177,6 @@ export function registerDesktopRoutes(
   app.openapi(
     createRoute({
       method: "get",
-      path: "/api/internal/desktop/fallback-events",
-      tags: ["Desktop"],
-      request: {
-        query: fallbackEventsQuerySchema,
-      },
-      responses: {
-        200: {
-          content: {
-            "application/json": { schema: fallbackEventsResponseSchema },
-          },
-          description: "Recent channel fallback diagnostics",
-        },
-      },
-    }),
-    async (c) => {
-      const query = c.req.valid("query");
-      return c.json(
-        {
-          events: container.channelFallbackService.listRecentEvents(
-            query.limit,
-          ),
-        },
-        200,
-      );
-    },
-  );
-
-  app.openapi(
-    createRoute({
-      method: "get",
       path: "/api/internal/desktop/preferences",
       tags: ["Desktop"],
       responses: {
@@ -340,7 +277,8 @@ export function registerDesktopRoutes(
         (ch) => ch.status === "connected",
       )?.channelType;
     }
-    if (!channel) return c.json({ ok: false, reason: "no channel" }, 400);
+    if (channel !== "wechat" && channel !== "openclaw-weixin")
+      return c.json({ ok: false, reason: "unsupported channel" }, 400);
 
     const locale = await container.configStore.getDesktopLocale();
     const message =

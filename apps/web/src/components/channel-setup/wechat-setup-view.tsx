@@ -1,4 +1,3 @@
-import { identify, track } from "@/lib/tracking";
 import { Loader2, QrCode, RefreshCw, Smartphone } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -182,11 +181,6 @@ export function WechatSetupView({
         }
 
         toast.success(t("wechatSetup.connectSuccess"));
-        track("channel_ready", {
-          channel: "wechat",
-          channel_type: "wechat_personal",
-        });
-        identify({ channels_connected: 1 });
         onConnected();
         setPhase("idle");
       } else {

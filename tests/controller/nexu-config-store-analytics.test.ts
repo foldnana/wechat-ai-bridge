@@ -67,7 +67,7 @@ describe("NexuConfigStore desktop analytics defaults", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("persists analytics enabled in the default config", async () => {
+  it("persists analytics disabled in the default config", async () => {
     const env = createEnv(tempDir);
     const store = new NexuConfigStore(env);
 
@@ -76,11 +76,11 @@ describe("NexuConfigStore desktop analytics defaults", () => {
       desktop?: { analyticsEnabled?: boolean };
     };
 
-    expect(config.desktop.analyticsEnabled).toBe(true);
-    expect(rawConfig.desktop?.analyticsEnabled).toBe(true);
+    expect(config.desktop.analyticsEnabled).toBe(false);
+    expect(rawConfig.desktop?.analyticsEnabled ?? false).toBe(false);
   });
 
-  it("backfills analytics enabled when reading an older config without the key", async () => {
+  it("does not opt older configs into analytics", async () => {
     const env = createEnv(tempDir);
     const legacyConfig = {
       $schema: "https://nexu.io/config.json",
@@ -109,11 +109,11 @@ describe("NexuConfigStore desktop analytics defaults", () => {
 
     const store = new NexuConfigStore(env);
 
-    expect(await store.getDesktopAnalyticsEnabled()).toBe(true);
+    expect(await store.getDesktopAnalyticsEnabled()).toBe(false);
 
     const rawConfig = JSON.parse(readFileSync(env.nexuConfigPath, "utf8")) as {
       desktop?: { analyticsEnabled?: boolean };
     };
-    expect(rawConfig.desktop?.analyticsEnabled).toBe(true);
+    expect(rawConfig.desktop?.analyticsEnabled ?? false).toBe(false);
   });
 });

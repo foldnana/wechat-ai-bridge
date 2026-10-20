@@ -1,10 +1,9 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ControllerEnv } from "../src/app/env.js";
 import type { compileOpenClawConfig } from "../src/lib/openclaw-config-compiler.js";
-import { CreditGuardStateWriter } from "../src/runtime/credit-guard-state-writer.js";
 import { OpenClawAuthProfilesStore } from "../src/runtime/openclaw-auth-profiles-store.js";
 import { OpenClawAuthProfilesWriter } from "../src/runtime/openclaw-auth-profiles-writer.js";
 import { OpenClawConfigWriter } from "../src/runtime/openclaw-config-writer.js";
@@ -14,7 +13,6 @@ import { OpenClawRuntimePluginWriter } from "../src/runtime/slimclaw-runtime-plu
 import { WorkspaceTemplateWriter } from "../src/runtime/workspace-template-writer.js";
 import type { OpenClawGatewayService } from "../src/services/openclaw-gateway-service.js";
 import { OpenClawSyncService } from "../src/services/openclaw-sync-service.js";
-import { SkillDb } from "../src/services/skillhub/skill-db.js";
 import { CompiledOpenClawStore } from "../src/store/compiled-openclaw-store.js";
 import { NexuConfigStore } from "../src/store/nexu-config-store.js";
 
@@ -104,7 +102,6 @@ describe("OpenClawSyncService", () => {
       authProfilesStore,
       new OpenClawRuntimePluginWriter(env),
       new OpenClawRuntimeModelWriter(env),
-      new CreditGuardStateWriter(env),
       new WorkspaceTemplateWriter(env),
       new OpenClawWatchTrigger(env),
       {
@@ -114,18 +111,15 @@ describe("OpenClawSyncService", () => {
       } as unknown as OpenClawGatewayService,
     );
 
-    await configStore.createBot({ name: "Assistant", slug: "assistant" });
-    await configStore.connectSlack({
-      botToken: "xoxb-test",
-      signingSecret: "secret",
-      teamId: "T123",
-      appId: "A123",
-      teamName: "Acme",
+    const bot = await configStore.createBot({
+      name: "Assistant",
+      slug: "assistant",
     });
-    const template = await configStore.upsertTemplate({
-      name: "AGENTS.md",
-      content: "hello",
-    });
+    await configStore.connectWechat({ accountId: "test-wechat" });
+    env.platformTemplatesDir = path.join(rootDir, "platform-templates");
+    await mkdir(env.platformTemplatesDir, { recursive: true });
+    await writeFile(path.join(env.platformTemplatesDir, "AGENTS.md"), "hello");
+    await syncService.writePlatformTemplatesForBot(bot.id);
 
     await syncService.syncAll();
 
@@ -133,12 +127,12 @@ describe("OpenClawSyncService", () => {
       await readFile(env.openclawConfigPath, "utf8"),
     ) as ReturnType<typeof compileOpenClawConfig>;
     expect(config.agents.list).toHaveLength(1);
-    expect(config.channels.slack?.accounts["slack-A123-T123"]?.botToken).toBe(
-      "xoxb-test",
-    );
+    expect(
+      config.channels["openclaw-weixin"]?.accounts?.["test-wechat"],
+    ).toEqual({ enabled: true });
 
     const templateFile = await readFile(
-      path.join(env.openclawWorkspaceTemplatesDir, `${template.id}.md`),
+      path.join(env.openclawStateDir, "agents", bot.id, "AGENTS.md"),
       "utf8",
     );
     expect(templateFile).toBe("hello");
@@ -147,48 +141,5 @@ describe("OpenClawSyncService", () => {
       await readFile(env.compiledOpenclawSnapshotPath, "utf8"),
     ) as { config: Record<string, unknown> };
     expect(snapshot.config).toBeTruthy();
-  });
-
-  it("includes installed skill slugs in compiled agent config", async () => {
-    const configStore = new NexuConfigStore(env);
-    const compiledStore = new CompiledOpenClawStore(env);
-    const authProfilesStore = new OpenClawAuthProfilesStore(env);
-    const skillDb = await SkillDb.create(env.skillDbPath);
-
-    skillDb.recordInstall("web-search", "managed");
-    skillDb.recordInstall("image-gen", "managed");
-
-    const syncService = new OpenClawSyncService(
-      env,
-      configStore,
-      compiledStore,
-      new OpenClawConfigWriter(env),
-      new OpenClawAuthProfilesWriter(authProfilesStore),
-      authProfilesStore,
-      new OpenClawRuntimePluginWriter(env),
-      new OpenClawRuntimeModelWriter(env),
-      new CreditGuardStateWriter(env),
-      new WorkspaceTemplateWriter(env),
-      new OpenClawWatchTrigger(env),
-      {
-        isConnected: () => false,
-        shouldPushConfig: async () => false,
-        noteConfigWritten: () => {},
-      } as unknown as OpenClawGatewayService,
-      skillDb,
-    );
-
-    await configStore.createBot({ name: "Assistant", slug: "assistant" });
-    await syncService.syncAllImmediate();
-
-    const config = JSON.parse(
-      await readFile(env.openclawConfigPath, "utf8"),
-    ) as ReturnType<typeof compileOpenClawConfig>;
-
-    expect(config.agents.list).toHaveLength(1);
-    expect(config.agents.list[0].skills).toEqual(
-      expect.arrayContaining(["web-search", "image-gen"]),
-    );
-    expect(config.agents.list[0].skills).toHaveLength(2);
   });
 });

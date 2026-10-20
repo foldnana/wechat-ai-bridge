@@ -1,6 +1,4 @@
-import * as Sentry from "@sentry/electron/renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import posthog, { type PostHogConfig } from "posthog-js";
 import React, {
   useCallback,
   useEffect,
@@ -26,9 +24,7 @@ import type {
   RuntimeUnitSnapshot,
   RuntimeUnitState,
 } from "../shared/host";
-import { getDesktopSentryBuildMetadata } from "../shared/sentry-build-metadata";
 import { resolveDesktopUpdateExperience } from "../shared/update-policy";
-import { DevelopSetBalanceDialog } from "./components/develop-set-balance-dialog";
 import { SurfaceFrame } from "./components/surface-frame";
 import { UpdateBadge, UpdateBanner } from "./components/update-banner";
 import { useAutoUpdate } from "./hooks/use-auto-update";
@@ -36,7 +32,6 @@ import { ensureDesktopControllerReady } from "./lib/controller-ready";
 import {
   checkComponentUpdates,
   getAppInfo,
-  getDesktopCloudStatus,
   getDiagnosticsInfo,
   getRuntimeConfig,
   getRuntimeState,
@@ -53,38 +48,11 @@ import {
   triggerRendererProcessCrash,
 } from "./lib/host-api";
 import { getDesktopOpenClawUrl } from "./lib/openclaw-surface";
-import { syncDesktopPostHogIdentity } from "./lib/posthog-identity";
-import { CloudProfilePage } from "./pages/cloud-profile-page";
 import "./runtime-page.css";
-
-const posthogApiKey =
-  import.meta.env.VITE_POSTHOG_API_KEY ??
-  (typeof window === "undefined"
-    ? null
-    : window.nexuHost.bootstrap.posthogApiKey);
-const posthogHost =
-  import.meta.env.VITE_POSTHOG_HOST ??
-  (typeof window === "undefined"
-    ? null
-    : window.nexuHost.bootstrap.posthogHost);
-const rendererSentryDsn =
-  typeof window === "undefined" ? null : window.nexuHost.bootstrap.sentryDsn;
-const posthogSuperProperties = {
-  environment: import.meta.env.MODE,
-  appName: "nexu-desktop",
-  appVersion:
-    typeof window === "undefined"
-      ? "unknown"
-      : window.nexuHost.bootstrap.buildInfo.version,
-};
 
 type ControllerSurfaceState = "polling" | "recovering" | "failed";
 
-let rendererSentryInitialized = false;
-let posthogTelemetryInitialized = false;
 let rendererCommitReported = false;
-let currentPosthogUserId: string | null = null;
-let currentPosthogIdentifyKey: string | null = null;
 
 function sendRendererStartupProbe(
   stage: string,
@@ -139,71 +107,6 @@ window.addEventListener("unhandledrejection", (event) => {
     });
   }
 });
-
-function initializeRendererSentry(dsn: string): void {
-  if (rendererSentryInitialized) {
-    return;
-  }
-
-  const sentryBuildMetadata = getDesktopSentryBuildMetadata(
-    window.nexuHost.bootstrap.buildInfo,
-  );
-
-  Sentry.init({
-    dsn,
-    environment: import.meta.env.MODE,
-    release: sentryBuildMetadata.release,
-    ...(sentryBuildMetadata.dist ? { dist: sentryBuildMetadata.dist } : {}),
-  });
-
-  Sentry.setContext("build", sentryBuildMetadata.buildContext);
-
-  rendererSentryInitialized = true;
-}
-
-function initializePostHogTelemetry(): void {
-  if (posthogTelemetryInitialized || !posthogApiKey) {
-    return;
-  }
-
-  const config: Partial<PostHogConfig> = {
-    autocapture: true,
-    disable_session_recording: false,
-    loaded: (client) => {
-      client.register(posthogSuperProperties);
-    },
-  };
-
-  if (posthogHost) {
-    config.api_host = posthogHost;
-  }
-
-  posthog.init(posthogApiKey, config);
-  posthogTelemetryInitialized = true;
-}
-
-function syncPostHogIdentity(input: {
-  userId?: string | null;
-  userEmail?: string | null;
-  userName?: string | null;
-}): void {
-  if (!posthogTelemetryInitialized) {
-    return;
-  }
-
-  const nextState = syncDesktopPostHogIdentity(
-    posthog,
-    posthogSuperProperties,
-    {
-      currentUserId: currentPosthogUserId,
-      currentIdentifyKey: currentPosthogIdentifyKey,
-    },
-    input,
-  );
-
-  currentPosthogUserId = nextState.currentUserId;
-  currentPosthogIdentifyKey = nextState.currentIdentifyKey;
-}
 
 function maskSentryDsn(dsn: string | null | undefined): string {
   if (!dsn) {
@@ -1070,7 +973,6 @@ function DiagnosticsPage({
 function DesktopShell() {
   const isPackaged = window.nexuHost.bootstrap.isPackaged;
   const [activeSurface, setActiveSurface] = useState<DesktopSurface>("web");
-  const [showSetBalanceDialog, setShowSetBalanceDialog] = useState(false);
   const [chromeMode, setChromeMode] = useState<DesktopChromeMode>(
     isPackaged ? "immersive" : "full",
   );
@@ -1143,10 +1045,6 @@ function DesktopShell() {
     return onDesktopCommand((command) => {
       if (command.type === "desktop:check-for-updates") {
         void update.check();
-        return;
-      }
-      if (command.type === "develop:open-set-balance") {
-        setShowSetBalanceDialog(true);
         return;
       }
       if (command.type === "setup:complete") {
@@ -1241,10 +1139,6 @@ function DesktopShell() {
           : "desktop-shell"
       }
     >
-      <DevelopSetBalanceDialog
-        open={showSetBalanceDialog}
-        onClose={() => setShowSetBalanceDialog(false)}
-      />
       <div className="window-drag-bar" />
       <aside className="desktop-sidebar">
         <div className="desktop-sidebar-brand">
@@ -1270,12 +1164,7 @@ function DesktopShell() {
             meta="Bootstrap status and per-unit intervention"
             onClick={() => setActiveSurface("control")}
           />
-          <SurfaceButton
-            active={activeSurface === "cloud-profile"}
-            label="Cloud Profile"
-            meta="Switch cloud endpoints and reset auth state"
-            onClick={() => setActiveSurface("cloud-profile")}
-          />
+
           <SurfaceButton
             active={activeSurface === "web"}
             disabled={!desktopWebUrl}
@@ -1334,13 +1223,7 @@ function DesktopShell() {
         >
           <EmbeddedControlPlane />
         </div>
-        <div
-          style={{
-            display: activeSurface === "cloud-profile" ? "contents" : "none",
-          }}
-        >
-          <CloudProfilePage />
-        </div>
+
         <div style={{ display: activeSurface === "web" ? "contents" : "none" }}>
           {desktopWebUrl ? (
             <SurfaceFrame
@@ -1525,82 +1408,6 @@ function RootApp() {
   return <DesktopShell />;
 }
 
-function RendererTelemetryBootstrap() {
-  useEffect(() => {
-    if (rendererSentryDsn && !rendererSentryInitialized) {
-      sendRendererStartupProbe("renderer:sentry-init:start", "ok");
-      try {
-        initializeRendererSentry(rendererSentryDsn);
-        sendRendererStartupProbe("renderer:sentry-init:success", "ok");
-      } catch (error) {
-        sendRendererStartupProbe(
-          "renderer:sentry-init:error",
-          "error",
-          error instanceof Error
-            ? (error.stack ?? error.message)
-            : String(error),
-        );
-        console.error("[desktop] renderer Sentry init failed", error);
-      }
-    }
-
-    if (!posthogApiKey || posthogTelemetryInitialized) {
-      return;
-    }
-
-    sendRendererStartupProbe("renderer:posthog-init:start", "ok");
-    try {
-      initializePostHogTelemetry();
-      sendRendererStartupProbe("renderer:posthog-init:success", "ok");
-    } catch (error) {
-      sendRendererStartupProbe(
-        "renderer:posthog-init:error",
-        "error",
-        error instanceof Error ? (error.stack ?? error.message) : String(error),
-      );
-      console.error("[desktop] renderer PostHog init failed", error);
-    }
-  }, []);
-
-  return null;
-}
-
-function RendererAnalyticsIdentitySync() {
-  useEffect(() => {
-    let cancelled = false;
-
-    const sync = async () => {
-      try {
-        const data = await getDesktopCloudStatus();
-        if (cancelled) {
-          return;
-        }
-
-        syncPostHogIdentity({
-          userId: data.userId ?? null,
-          userEmail: data.userEmail ?? null,
-          userName: data.userName ?? null,
-        });
-      } catch {
-        // Ignore transient fetch errors. Keep existing identity until a
-        // successful status refresh says otherwise.
-      }
-    };
-
-    void sync();
-    const interval = window.setInterval(() => {
-      void sync();
-    }, 2000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, []);
-
-  return null;
-}
-
 function RendererStartupSentinel() {
   useEffect(() => {
     if (rendererCommitReported) {
@@ -1630,8 +1437,7 @@ appRoot.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <RendererStartupSentinel />
-      <RendererTelemetryBootstrap />
-      <RendererAnalyticsIdentitySync />
+
       <RootApp />
     </QueryClientProvider>
   </React.StrictMode>,

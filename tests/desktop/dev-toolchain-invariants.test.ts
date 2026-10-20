@@ -175,23 +175,6 @@ describe("ELECTRON_RUN_AS_NODE coverage", () => {
     expect(runtimeResolution).toContain("ELECTRON_RUN_AS_NODE");
     expect(runtimeResolution).toContain("OPENCLAW_ELECTRON_EXECUTABLE");
   });
-
-  // -----------------------------------------------------------------------
-  // Bonus: No spawn of process.execPath without ELECTRON_RUN_AS_NODE
-  // in catalog-manager (skill install uses Electron binary)
-  // -----------------------------------------------------------------------
-  it("catalog-manager.ts sets ELECTRON_RUN_AS_NODE for execFile calls", () => {
-    const catalogMgr = readFile(
-      "apps/controller/src/services/skillhub/catalog-manager.ts",
-    );
-
-    // Every execFile call with env should include ELECTRON_RUN_AS_NODE
-    const execFileCalls = catalogMgr.match(/execFile.*\{[^}]*env:/g) ?? [];
-    for (const _call of execFileCalls) {
-      // The surrounding context should mention ELECTRON_RUN_AS_NODE
-      expect(catalogMgr).toContain("ELECTRON_RUN_AS_NODE");
-    }
-  });
 });
 
 // =========================================================================

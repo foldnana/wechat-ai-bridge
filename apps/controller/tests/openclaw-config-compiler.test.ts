@@ -4,7 +4,11 @@ import {
   type OAuthConnectionState,
   compileOpenClawConfig,
 } from "../src/lib/openclaw-config-compiler.js";
-import type { NexuConfig } from "../src/store/schemas.js";
+import {
+  type NexuConfig,
+  migrateLegacyProvidersToCanonicalModelsConfig,
+  nexuConfigSchema,
+} from "../src/store/schemas.js";
 
 function createEnv(overrides: Record<string, unknown> = {}): ControllerEnv {
   return {
@@ -35,7 +39,7 @@ function createEnv(overrides: Record<string, unknown> = {}): ControllerEnv {
 
 function createConfig(overrides: Partial<NexuConfig> = {}): NexuConfig {
   const now = new Date().toISOString();
-  return {
+  const raw = {
     $schema: "https://nexu.io/config.json",
     schemaVersion: 1,
     app: {},
@@ -147,51 +151,30 @@ function createConfig(overrides: Partial<NexuConfig> = {}): NexuConfig {
       "channel:feishu-channel-1:verificationToken": "verify-token",
     },
     ...overrides,
-  } as unknown as NexuConfig;
+  };
+  return Object.assign(
+    nexuConfigSchema.parse({
+      ...raw,
+      models:
+        overrides.models ??
+        migrateLegacyProvidersToCanonicalModelsConfig(raw.providers ?? []),
+    }),
+    { providers: raw.providers },
+  );
 }
 
 describe("compileOpenClawConfig", () => {
-  it("builds OpenClaw config with provider and channel parity defaults", () => {
+  it("keeps gateway authentication while excluding old channel and cloud configuration", () => {
     const result = compileOpenClawConfig(createConfig(), createEnv());
-
     expect(result.gateway.auth.mode).toBe("token");
     expect(result.gateway.auth.token).toBe("token-123");
-    expect(result.agents.defaults?.model).toEqual({
-      primary: "byok_anthropic/anthropic/claude-sonnet-4",
-    });
     expect(result.agents.list[0]).toMatchObject({
       id: "bot-1",
       workspace: "/tmp/openclaw/agents/bot-1",
-      model: { primary: "byok_anthropic/anthropic/claude-sonnet-4" },
     });
-    expect(result.models?.providers.openai?.models[0]?.id).toBe("gpt-4o");
-    expect(result.models?.providers.byok_anthropic?.models[0]?.id).toBe(
-      "anthropic/claude-sonnet-4",
-    );
-    expect(result.models?.providers.link?.baseUrl).toBe(
-      "https://link.example.com/v1",
-    );
-    expect(result.channels.slack?.accounts["slack-A123-T123"]).toMatchObject({
-      mode: "http",
-      webhookPath: "/slack/events/slack-A123-T123",
-      botToken: "xoxb-test",
-    });
-    expect(result.channels.feishu?.accounts.cli_a1b2c3).toMatchObject({
-      connectionMode: "webhook",
-      webhookPath: "/feishu/events/cli_a1b2c3",
-      verificationToken: "verify-token",
-    });
-    expect(result.channels.feishu).not.toMatchObject({
-      streaming: expect.anything(),
-      renderMode: expect.anything(),
-      requireMention: expect.anything(),
-      tools: expect.anything(),
-    });
-    expect(result.plugins?.entries?.feishu?.enabled).toBe(true);
-    expect(result.skills?.load?.extraDirs).toEqual([
-      "/tmp/openclaw/skills",
-      "/tmp/.agents/skills",
-    ]);
+    expect(result.models?.providers.link).toBeUndefined();
+    expect(Object.keys(result.channels)).toEqual(["openclaw-weixin"]);
+    expect(result.skills?.load?.extraDirs).toEqual([]);
   });
 
   it("prewarms openclaw-weixin in plugins.allow even with no connected wechat channel", () => {
@@ -207,97 +190,6 @@ describe("compileOpenClawConfig", () => {
 
     expect(result.plugins?.allow).toContain("openclaw-weixin");
     expect(result.plugins?.entries?.["openclaw-weixin"]?.enabled).toBe(true);
-  });
-
-  it("compiles qqbot channels and enables the canonical qq plugin id", () => {
-    const now = new Date().toISOString();
-    const result = compileOpenClawConfig(
-      createConfig({
-        channels: [
-          {
-            id: "qq-channel-1",
-            botId: "bot-1",
-            channelType: "qqbot",
-            accountId: "default",
-            status: "connected",
-            teamName: null,
-            appId: "123456",
-            botUserId: null,
-            createdAt: now,
-            updatedAt: now,
-          },
-        ],
-        secrets: {
-          "channel:qq-channel-1:appId": "123456",
-          "channel:qq-channel-1:clientSecret": "qq-secret",
-        },
-      }),
-      createEnv(),
-    );
-
-    expect(result.channels.qqbot).toMatchObject({
-      enabled: true,
-      appId: "123456",
-      clientSecret: "qq-secret",
-      dmPolicy: "open",
-      groupPolicy: "open",
-      historyLimit: 50,
-      markdownSupport: true,
-    });
-    expect(result.bindings).toContainEqual({
-      agentId: "bot-1",
-      match: {
-        channel: "qqbot",
-        accountId: "default",
-      },
-    });
-    expect(result.plugins?.allow).toContain("openclaw-qqbot");
-    expect(result.plugins?.entries?.["openclaw-qqbot"]?.enabled).toBe(true);
-  });
-
-  it("compiles wecom channels and enables the canonical wecom plugin id", () => {
-    const now = new Date().toISOString();
-    const result = compileOpenClawConfig(
-      createConfig({
-        channels: [
-          {
-            id: "wecom-channel-1",
-            botId: "bot-1",
-            channelType: "wecom",
-            accountId: "default",
-            status: "connected",
-            teamName: null,
-            appId: "wecom-bot-123",
-            botUserId: null,
-            createdAt: now,
-            updatedAt: now,
-          },
-        ],
-        secrets: {
-          "channel:wecom-channel-1:botId": "wecom-bot-123",
-          "channel:wecom-channel-1:secret": "wecom-secret",
-        },
-      }),
-      createEnv(),
-    );
-
-    expect(result.channels.wecom).toMatchObject({
-      enabled: true,
-      botId: "wecom-bot-123",
-      secret: "wecom-secret",
-      dmPolicy: "open",
-      groupPolicy: "open",
-      sendThinkingMessage: true,
-    });
-    expect(result.bindings).toContainEqual({
-      agentId: "bot-1",
-      match: {
-        channel: "wecom",
-        accountId: "default",
-      },
-    });
-    expect(result.plugins?.allow).toContain("wecom");
-    expect(result.plugins?.entries?.wecom?.enabled).toBe(true);
   });
 
   it("injects env-backed litellm routing for bare local model ids", () => {
@@ -338,59 +230,6 @@ describe("compileOpenClawConfig", () => {
     expect(result.agents.list[0]?.model).toEqual({
       primary: "litellm/anthropic/claude-sonnet-4",
     });
-  });
-
-  it("compiles dingtalk channels and enables the canonical dingtalk plugin id", () => {
-    const now = new Date().toISOString();
-    const result = compileOpenClawConfig(
-      createConfig({
-        channels: [
-          {
-            id: "dingtalk-channel-1",
-            botId: "bot-1",
-            channelType: "dingtalk",
-            accountId: "default",
-            status: "connected",
-            teamName: null,
-            appId: "ding-client-id",
-            botUserId: null,
-            createdAt: now,
-            updatedAt: now,
-          },
-        ],
-        secrets: {
-          "channel:dingtalk-channel-1:clientId": "ding-client-id",
-          "channel:dingtalk-channel-1:clientSecret": "ding-client-secret",
-        },
-      }),
-      createEnv(),
-    );
-
-    expect(result.channels["dingtalk-connector"]).toMatchObject({
-      enabled: true,
-      clientId: "ding-client-id",
-      clientSecret: "ding-client-secret",
-      gatewayBaseUrl: "http://127.0.0.1:18789",
-      gatewayToken: "token-123",
-      dmPolicy: "open",
-      groupPolicy: "open",
-    });
-    expect(
-      (
-        result.gateway as {
-          http?: { endpoints?: { chatCompletions?: { enabled?: boolean } } };
-        }
-      ).http?.endpoints?.chatCompletions?.enabled,
-    ).toBe(true);
-    expect(result.bindings).toContainEqual({
-      agentId: "bot-1",
-      match: {
-        channel: "dingtalk-connector",
-        accountId: "default",
-      },
-    });
-    expect(result.plugins?.allow).toContain("dingtalk-connector");
-    expect(result.plugins?.entries?.["dingtalk-connector"]?.enabled).toBe(true);
   });
 
   it("does not remap openai models to OAuth providers without persisted OAuth state", () => {
@@ -535,7 +374,7 @@ describe("compileOpenClawConfig", () => {
     });
   });
 
-  it("treats the legacy SiliconFlow .com URL as a direct default endpoint", () => {
+  it("normalizes the legacy SiliconFlow endpoint before compilation", () => {
     const result = compileOpenClawConfig(
       createConfig({
         bots: [
@@ -574,7 +413,7 @@ describe("compileOpenClawConfig", () => {
     );
 
     expect(result.models?.providers.siliconflow?.baseUrl).toBe(
-      "https://api.siliconflow.com/v1",
+      "https://api.siliconflow.cn/v1",
     );
     expect(result.models?.providers.byok_siliconflow).toBeUndefined();
     expect(result.models?.providers.siliconflow?.models[0]?.id).toBe(
@@ -893,198 +732,6 @@ describe("compileOpenClawConfig", () => {
     });
   });
 
-  describe("agent skill assignment", () => {
-    it("includes skills on agents when installedSlugs is provided", () => {
-      const config = createConfig();
-      const env = createEnv();
-      const compiled = compileOpenClawConfig(config, env, undefined, [
-        "git",
-        "npm",
-      ]);
-      expect(compiled.agents.list[0].skills).toEqual(["git", "npm"]);
-    });
-
-    it("omits skills field when installedSlugs is empty (legacy fallback)", () => {
-      const config = createConfig();
-      const env = createEnv();
-      const compiled = compileOpenClawConfig(config, env, undefined, []);
-      expect(compiled.agents.list[0]).not.toHaveProperty("skills");
-    });
-
-    it("omits skills field when installedSlugs is undefined", () => {
-      const config = createConfig();
-      const env = createEnv();
-      const compiled = compileOpenClawConfig(config, env);
-      expect(compiled.agents.list[0]).not.toHaveProperty("skills");
-    });
-
-    it("assigns same skills to all active agents", () => {
-      const now = new Date().toISOString();
-      const config = createConfig({
-        bots: [
-          {
-            id: "bot-1",
-            name: "Bot A",
-            slug: "bot-a",
-            poolId: null,
-            status: "active",
-            modelId: "anthropic/claude-sonnet-4",
-            systemPrompt: null,
-            createdAt: now,
-            updatedAt: now,
-          },
-          {
-            id: "bot-2",
-            name: "Bot B",
-            slug: "bot-b",
-            poolId: null,
-            status: "active",
-            modelId: "anthropic/claude-sonnet-4",
-            systemPrompt: null,
-            createdAt: now,
-            updatedAt: now,
-          },
-        ],
-      });
-      const env = createEnv();
-      const compiled = compileOpenClawConfig(config, env, undefined, [
-        "calendar",
-      ]);
-      expect(compiled.agents.list).toHaveLength(2);
-      expect(compiled.agents.list[0].skills).toEqual(["calendar"]);
-      expect(compiled.agents.list[1].skills).toEqual(["calendar"]);
-    });
-  });
-
-  describe("per-agent workspace skill merge", () => {
-    it("merges shared and workspace skills for each agent", () => {
-      const now = new Date().toISOString();
-      const config = createConfig({
-        bots: [
-          {
-            id: "bot-1",
-            name: "Bot A",
-            slug: "bot-a",
-            poolId: null,
-            status: "active",
-            modelId: "anthropic/claude-sonnet-4",
-            systemPrompt: null,
-            createdAt: now,
-            updatedAt: now,
-          },
-          {
-            id: "bot-2",
-            name: "Bot B",
-            slug: "bot-b",
-            poolId: null,
-            status: "active",
-            modelId: "anthropic/claude-sonnet-4",
-            systemPrompt: null,
-            createdAt: now,
-            updatedAt: now,
-          },
-        ],
-      });
-      const wsMap = new Map<string, readonly string[]>([
-        ["bot-1", ["agent-tool"]],
-      ]);
-      const compiled = compileOpenClawConfig(
-        config,
-        createEnv(),
-        undefined,
-        ["shared-skill"],
-        wsMap,
-      );
-
-      const botA = compiled.agents.list.find((a) => a.id === "bot-1");
-      expect(botA?.skills).toEqual(
-        expect.arrayContaining(["shared-skill", "agent-tool"]),
-      );
-      expect(botA?.skills).toHaveLength(2);
-
-      const botB = compiled.agents.list.find((a) => a.id === "bot-2");
-      expect(botB?.skills).toEqual(["shared-skill"]);
-    });
-
-    it("sorts merged skills deterministically regardless of input order", () => {
-      const baseConfig = createConfig();
-      const baseBot = baseConfig.bots[0];
-      if (!baseBot) {
-        throw new Error("expected base config bot");
-      }
-      const config = createConfig({
-        bots: [
-          {
-            ...baseBot,
-            id: "bot-a",
-            slug: "bot-a",
-          },
-        ],
-        channels: [],
-      });
-
-      const compiled = compileOpenClawConfig(
-        config,
-        createEnv(),
-        undefined,
-        ["zeta", "alpha", "shared-skill"],
-        new Map([["bot-a", ["workspace-z", "alpha", "workspace-a"]]]),
-      );
-
-      expect(compiled.agents.list[0]?.skills).toEqual([
-        "alpha",
-        "shared-skill",
-        "workspace-a",
-        "workspace-z",
-        "zeta",
-      ]);
-    });
-
-    it("deduplicates when same slug in shared and workspace", () => {
-      const config = createConfig();
-      const wsMap = new Map<string, readonly string[]>([
-        ["bot-1", ["shared-skill"]],
-      ]);
-      const compiled = compileOpenClawConfig(
-        config,
-        createEnv(),
-        undefined,
-        ["shared-skill"],
-        wsMap,
-      );
-      const agent = compiled.agents.list[0];
-      expect(agent.skills).toEqual(["shared-skill"]);
-    });
-
-    it("workspace-only skills still activate allowlist", () => {
-      const config = createConfig();
-      const wsMap = new Map<string, readonly string[]>([
-        ["bot-1", ["ws-only"]],
-      ]);
-      const compiled = compileOpenClawConfig(
-        config,
-        createEnv(),
-        undefined,
-        [],
-        wsMap,
-      );
-      expect(compiled.agents.list[0].skills).toEqual(["ws-only"]);
-    });
-
-    it("omits skills when both shared and workspace are empty", () => {
-      const config = createConfig();
-      const wsMap = new Map<string, readonly string[]>();
-      const compiled = compileOpenClawConfig(
-        config,
-        createEnv(),
-        undefined,
-        [],
-        wsMap,
-      );
-      expect(compiled.agents.list[0]).not.toHaveProperty("skills");
-    });
-  });
-
   it("remaps openai models to OAuth provider ids when persisted OAuth state is connected", () => {
     const baseConfig = createConfig();
     const baseBot = baseConfig.bots[0];
@@ -1132,7 +779,7 @@ describe("compileOpenClawConfig", () => {
     });
   });
 
-  it("omits empty apiKey fields for oauth-backed providers in compiled models config", () => {
+  it("leaves OAuth model registration to the runtime auth profile", () => {
     const result = compileOpenClawConfig(
       createConfig({
         providers: [],
@@ -1172,8 +819,6 @@ describe("compileOpenClawConfig", () => {
       createEnv(),
     );
 
-    expect(result.models?.providers.openai).toBeDefined();
-    expect(result.models?.providers.openai).not.toHaveProperty("apiKey");
-    expect(result.models?.providers.openai?.models[0]?.id).toBe("gpt-5.4");
+    expect(result.models?.providers.openai).toBeUndefined();
   });
 });

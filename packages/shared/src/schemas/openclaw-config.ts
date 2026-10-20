@@ -452,8 +452,8 @@ const modelsConfigSchema = z.object({
 
 const commandsConfigSchema = z
   .object({
-    native: z.enum(["auto", "off"]).optional(),
-    nativeSkills: z.enum(["auto", "off"]).optional(),
+    native: z.union([z.boolean(), z.literal("auto")]).optional(),
+    nativeSkills: z.union([z.boolean(), z.literal("auto")]).optional(),
     restart: z.boolean().optional(),
     ownerDisplay: z.enum(["raw", "friendly"]).optional(),
   })

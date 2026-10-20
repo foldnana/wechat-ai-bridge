@@ -463,7 +463,7 @@ export const controllerRuntimeConfigSchema = z
         authMode: z.enum(["none", "token"]).default("none"),
       })
       .default({ port: 18789, bind: "loopback", authMode: "none" }),
-    defaultModelId: z.string().default("link/gemini-3-flash-preview"),
+    defaultModelId: z.string().default(""),
   })
   .passthrough();
 

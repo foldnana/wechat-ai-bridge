@@ -97,7 +97,7 @@ describe("ModelProviderService", () => {
     expect(config.runtime.defaultModelId).toBe("link/gemini-3-flash-preview");
   });
 
-  it("reads cached cloud models without mutating config on read", async () => {
+  it("ignores cached cloud models without mutating config on read", async () => {
     const env = createEnv(tempDir);
     writeFileSync(
       env.nexuConfigPath,
@@ -144,13 +144,11 @@ describe("ModelProviderService", () => {
     const service = createService(store, env);
 
     const models = await service.listModels();
-    const cloudStatus = await store.getDesktopCloudStatus();
     const after = readFileSync(env.nexuConfigPath, "utf8");
 
     expect(
       models.models.some((model) => model.id === "gemini-3.1-pro-preview"),
-    ).toBe(true);
-    expect(cloudStatus.models).toHaveLength(1);
+    ).toBe(false);
     expect(after).toBe(before);
   });
 

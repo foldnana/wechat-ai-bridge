@@ -6,7 +6,6 @@ import type { NexuConfig } from "../store/schemas.js";
 import {
   compileChannelBindings,
   compileChannelsConfig,
-  resolveManagedChannelPluginId,
 } from "./channel-binding-compiler.js";
 import {
   buildProviderRuntimeModelId,
@@ -15,13 +14,8 @@ import {
   listModelProviderRuntimeDescriptors,
   resolveModelProviderApiKey,
 } from "./model-provider-runtime.js";
-import { normalizeProviderBaseUrl } from "./provider-base-url.js";
 
 export type { OAuthConnectionState };
-
-const LINK_PROVIDER_HEADERS = {
-  "User-Agent": "Mozilla/5.0",
-};
 
 const EMPTY_OAUTH_CONNECTION_STATE: OAuthConnectionState = {
   connectedProviderIds: [],
@@ -30,23 +24,6 @@ const EMPTY_OAUTH_CONNECTION_STATE: OAuthConnectionState = {
 const OAUTH_PROVIDER_MAP: Record<string, string> = {
   openai: "openai-codex",
 };
-
-function isDesktopCloudConfig(value: unknown): value is {
-  linkUrl: string;
-  apiKey: string;
-  models: Array<{ id: string; name: string; provider?: string }>;
-} {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.linkUrl === "string" &&
-    typeof candidate.apiKey === "string" &&
-    Array.isArray(candidate.models)
-  );
-}
 
 function getDesktopSelectedModel(config: NexuConfig): string | null {
   const selectedModelId = config.desktop.selectedModelId;
@@ -143,21 +120,6 @@ function compileModelsConfig(
     };
   }
 
-  const desktopCloud = isDesktopCloudConfig(config.desktop.cloud)
-    ? config.desktop.cloud
-    : null;
-  if (desktopCloud && desktopCloud.models.length > 0) {
-    providers.link = {
-      baseUrl: `${normalizeProviderBaseUrl(desktopCloud.linkUrl) ?? desktopCloud.linkUrl}/v1`,
-      apiKey: desktopCloud.apiKey,
-      api: "openai-completions",
-      headers: LINK_PROVIDER_HEADERS,
-      models: desktopCloud.models.map((model) =>
-        buildModelEntry(model.id, model.name),
-      ),
-    };
-  }
-
   return Object.keys(providers).length > 0
     ? {
         mode: "merge",
@@ -202,23 +164,6 @@ export function resolveModelId(
     );
   }
 
-  if (isDesktopCloudConfig(config.desktop.cloud)) {
-    const cloudModels = config.desktop.cloud.models;
-    const slashIndex = rawModelId.indexOf("/");
-    const modelSuffix =
-      slashIndex > 0 ? rawModelId.slice(slashIndex + 1) : null;
-    // Only use Link fallback if the model actually exists in Link's model list
-    if (cloudModels.some((m) => m.id === rawModelId)) {
-      return `link/${rawModelId}`;
-    }
-    if (
-      modelSuffix &&
-      cloudModels.some((m) => m.id === modelSuffix || m.name === modelSuffix)
-    ) {
-      return `link/${modelSuffix}`;
-    }
-  }
-
   if (env.litellmBaseUrl && env.litellmApiKey) {
     return `litellm/${rawModelId}`;
   }
@@ -230,24 +175,13 @@ function compileAgentList(
   config: NexuConfig,
   env: ControllerEnv,
   oauthState: OAuthConnectionState,
-  installedSkillSlugs?: readonly string[],
-  workspaceSkillsByAgent?: ReadonlyMap<string, readonly string[]>,
+  _installedSkillSlugs?: readonly string[],
+  _workspaceSkillsByAgent?: ReadonlyMap<string, readonly string[]>,
 ): OpenClawConfig["agents"]["list"] {
-  const sharedSlugs = [...(installedSkillSlugs ?? [])].sort((left, right) =>
-    left.localeCompare(right),
-  );
-
   return config.bots
     .filter((bot) => bot.status === "active")
     .sort((left, right) => left.slug.localeCompare(right.slug))
     .map((bot, index) => {
-      const workspaceSlugs = [
-        ...(workspaceSkillsByAgent?.get(bot.id) ?? []),
-      ].sort((left, right) => left.localeCompare(right));
-      const merged = Array.from(
-        new Set([...sharedSlugs, ...workspaceSlugs]),
-      ).sort((left, right) => left.localeCompare(right));
-
       return {
         id: bot.id,
         name: bot.name,
@@ -256,116 +190,32 @@ function compileAgentList(
         model: bot.modelId
           ? { primary: resolveModelId(config, env, bot.modelId, oauthState) }
           : undefined,
-        ...(merged.length > 0 ? { skills: merged } : {}),
+        skills: [],
       };
     });
 }
-
 function compilePlugins(
   config: NexuConfig,
   env: ControllerEnv,
 ): OpenClawConfig["plugins"] {
-  const resolvedMiniMaxOauth = listModelProviderRuntimeDescriptors(config).some(
+  const minimaxOauth = listModelProviderRuntimeDescriptors(config).some(
     (descriptor) =>
       descriptor.providerId === "minimax" &&
       descriptor.provider.enabled &&
       descriptor.provider.auth === "oauth" &&
       descriptor.legacyOauthCredential !== null,
   );
-
-  const connectedPluginIds = [
-    ...new Set(
-      config.channels
-        .filter((channel) => channel.status === "connected")
-        .map((channel) => resolveManagedChannelPluginId(channel.channelType))
-        .filter((pluginId): pluginId is string => pluginId !== null),
-    ),
-  ];
-  // Always-allow channel plugins whose extensions are bundled in every
-  // environment so connect/disconnect only mutates channel-level config
-  // and hot-reloads (~500ms) instead of changing plugins.allow which
-  // triggers a full gateway restart (~11s).
-  // "feishu" must be listed here because OpenClaw auto-enables it and
-  // writes it back to plugins.allow on disk; if controller's compiled
-  // config omits it, the next write creates a diff that triggers a
-  // gateway restart, and the cycle repeats.
-  const prewarmedChannelPluginIds = ["feishu", "openclaw-weixin"];
-  const analyticsEnabled = config.desktop.analyticsEnabled !== false;
-  const platformPluginIds = [
-    "nexu-runtime-model",
-    "nexu-credit-guard",
-    "nexu-platform-bootstrap",
-    // Always allow langfuse-tracer so analytics preference changes only
-    // toggle its `enabled` flag (hot-reload) instead of mutating
-    // plugins.allow which triggers a full gateway restart (~11s).
-    "langfuse-tracer",
-    ...(resolvedMiniMaxOauth ? ["minimax-portal-auth"] : []),
-  ];
-
-  // Sort and dedup defensively so `plugins.allow` is fully deterministic.
-  // Without this, channel reorderings or brief status flaps change the
-  // output order, which OpenClaw treats as a config change and triggers
-  // a SIGUSR1 restart + 11s gateway drain per reload.
-  const allow = Array.from(
-    new Set([
-      ...connectedPluginIds,
-      ...prewarmedChannelPluginIds,
-      ...platformPluginIds,
-    ]),
-  ).sort();
-
   return {
-    load: {
-      paths: [env.openclawExtensionsDir],
-    },
-    allow,
+    load: { paths: [env.openclawExtensionsDir] },
+    allow: [
+      "openclaw-weixin",
+      "nexu-runtime-model",
+      ...(minimaxOauth ? ["minimax-portal-auth"] : []),
+    ],
     entries: {
-      feishu: {
-        enabled: true,
-      },
-      "openclaw-weixin": {
-        enabled: true,
-      },
-      ...(connectedPluginIds.includes("dingtalk-connector")
-        ? {
-            "dingtalk-connector": {
-              enabled: true,
-            },
-          }
-        : {}),
-      ...(connectedPluginIds.includes("wecom")
-        ? {
-            wecom: {
-              enabled: true,
-            },
-          }
-        : {}),
-      ...(connectedPluginIds.includes("openclaw-qqbot")
-        ? {
-            "openclaw-qqbot": {
-              enabled: true,
-            },
-          }
-        : {}),
-      "nexu-runtime-model": {
-        enabled: true,
-      },
-      "langfuse-tracer": {
-        enabled: analyticsEnabled,
-      },
-      "nexu-credit-guard": {
-        enabled: true,
-        config: {
-          contactUrl: "https://nexu.app/contact",
-        },
-      },
-      ...(resolvedMiniMaxOauth
-        ? {
-            "minimax-portal-auth": {
-              enabled: true,
-            },
-          }
-        : {}),
+      "openclaw-weixin": { enabled: true },
+      "nexu-runtime-model": { enabled: true },
+      ...(minimaxOauth ? { "minimax-portal-auth": { enabled: true } } : {}),
     },
   };
 }
@@ -374,8 +224,8 @@ export function compileOpenClawConfig(
   config: NexuConfig,
   env: ControllerEnv,
   oauthState: OAuthConnectionState = EMPTY_OAUTH_CONNECTION_STATE,
-  installedSkillSlugs?: readonly string[],
-  workspaceSkillsByAgent?: ReadonlyMap<string, readonly string[]>,
+  _installedSkillSlugs?: readonly string[],
+  _workspaceSkillsByAgent?: ReadonlyMap<string, readonly string[]>,
 ): OpenClawConfig {
   const disableMdnsDiscovery = process.env.CI === "true";
   const activeBots = config.bots.filter((bot) => bot.status === "active");
@@ -423,9 +273,7 @@ export function compileOpenClawConfig(
           },
         },
       },
-      tools: {
-        allow: ["cron"],
-      },
+      tools: { allow: [], deny: ["*"] },
     },
     agents: {
       defaults: {
@@ -443,7 +291,7 @@ export function compileOpenClawConfig(
           recentTurnsPreserve: 5,
           qualityGuard: { enabled: true },
           memoryFlush: {
-            enabled: true,
+            enabled: false,
           },
         },
         // LLM call timeout. Default is 600s (10min) which causes the bot to
@@ -456,42 +304,21 @@ export function compileOpenClawConfig(
           mode: "off",
         },
         verboseDefault: "off",
+        memorySearch: { enabled: false },
+        heartbeat: { every: "0m" },
       },
       list: compileAgentList(
         config,
         env,
         oauthState,
-        installedSkillSlugs,
-        workspaceSkillsByAgent,
+        _installedSkillSlugs,
+        _workspaceSkillsByAgent,
       ),
     },
     tools: {
-      exec: {
-        security: "full",
-        ask: "off",
-        host: process.env.SANDBOX_ENABLED === "true" ? "sandbox" : "gateway",
-      },
-      web: {
-        search: {
-          enabled: true,
-          ...(process.env.BRAVE_API_KEY
-            ? { provider: "brave", apiKey: process.env.BRAVE_API_KEY }
-            : {}),
-        },
-        fetch: {
-          enabled: true,
-        },
-      },
-      ...(process.env.SANDBOX_ENABLED === "true"
-        ? {
-            sandbox: {
-              tools: {
-                allow: [],
-                deny: ["gateway"],
-              },
-            },
-          }
-        : {}),
+      deny: ["*"],
+      exec: { security: "deny", ask: "always", host: "gateway" },
+      web: { search: { enabled: false }, fetch: { enabled: false } },
     },
     session: {
       dmScope: "per-peer",
@@ -504,7 +331,7 @@ export function compileOpenClawConfig(
       },
     },
     cron: {
-      enabled: true,
+      enabled: false,
     },
     messages: {
       ackReaction: "eyes",
@@ -513,51 +340,27 @@ export function compileOpenClawConfig(
     },
     models: compileModelsConfig(config, env),
     channels: compileChannelsConfig({
-      channels: config.channels,
+      channels: config.channels.filter(
+        (channel) => channel.channelType === "wechat",
+      ),
       secrets: config.secrets,
       gatewayBaseUrl: `http://127.0.0.1:${env.openclawGatewayPort}`,
       gatewayToken: env.openclawGatewayToken,
     }),
-    bindings: compileChannelBindings(config.bots, config.channels),
+    bindings: compileChannelBindings(
+      config.bots,
+      config.channels.filter((channel) => channel.channelType === "wechat"),
+    ),
     plugins: compilePlugins(config, env),
-    skills: {
-      load: {
-        watch: true,
-        watchDebounceMs: 250,
-        extraDirs: [env.openclawSkillsDir, env.userSkillsDir].filter(Boolean),
-      },
-    },
+    skills: { load: { watch: false, extraDirs: [] } },
     commands: {
-      native: "auto",
-      nativeSkills: "auto",
-      restart: true,
+      native: false,
+      nativeSkills: false,
+      restart: false,
       ownerDisplay: "raw",
       ownerAllowFrom: ["*"],
     },
-    diagnostics: {
-      enabled: true,
-      ...(process.env.DD_API_KEY || process.env.OTEL_EXPORTER_OTLP_ENDPOINT
-        ? {
-            otel: {
-              enabled: true,
-              endpoint:
-                process.env.OTEL_EXPORTER_OTLP_ENDPOINT ??
-                `https://otlp.${process.env.DD_SITE ?? "datadoghq.com"}`,
-              serviceName: process.env.OTEL_SERVICE_NAME ?? "nexu-openclaw",
-              traces: true,
-              metrics: true,
-              logs: true,
-              ...(process.env.DD_API_KEY
-                ? {
-                    headers: {
-                      "dd-api-key": process.env.DD_API_KEY,
-                    },
-                  }
-                : {}),
-            },
-          }
-        : {}),
-    },
+    diagnostics: { enabled: false },
   };
 
   return openclawConfigSchema.parse(openClawConfig);

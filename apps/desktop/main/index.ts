@@ -2,14 +2,12 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import * as Sentry from "@sentry/electron/main";
 import {
   BrowserWindow,
   Menu,
   type MenuItemConstructorOptions,
   Tray,
   app,
-  crashReporter,
   dialog,
   globalShortcut,
   nativeImage,
@@ -20,14 +18,9 @@ import {
   shell,
 } from "electron";
 import { getOpenclawSkillsDir } from "../shared/desktop-paths";
-import type {
-  DesktopChromeMode,
-  DesktopSurface,
-  HostDesktopCommand,
-} from "../shared/host";
+import type { DesktopChromeMode, DesktopSurface } from "../shared/host";
 import { buildChildProcessProxyEnv } from "../shared/proxy-config";
 import { getDesktopRuntimeConfig } from "../shared/runtime-config";
-import { getDesktopSentryBuildMetadata } from "../shared/sentry-build-metadata";
 import {
   shouldEnableDesktopUpdateManager,
   shouldStartDesktopPeriodicUpdateChecks,
@@ -209,7 +202,6 @@ app.commandLine.appendSwitch("disable-background-timer-throttling");
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 
-const sentryDsn = runtimeConfig.sentryDsn;
 const embeddedWorkspaceTransparentCss = `
   html,
   body,
@@ -228,112 +220,7 @@ const desktopDevInspectToken =
   process.env.NEXU_DESKTOP_DEV_INSPECT_TOKEN ?? null;
 const desktopDevServerUrl = process.env.NEXU_DESKTOP_DEV_SERVER_URL ?? null;
 
-function readNativeCrashTestTitle(event: Sentry.Event): string | null {
-  const taggedTitle =
-    typeof event.tags?.["nexu.crash_title"] === "string"
-      ? event.tags["nexu.crash_title"]
-      : typeof event.extra?.["nexu.crash_title"] === "string"
-        ? event.extra["nexu.crash_title"]
-        : null;
-
-  if (taggedTitle) {
-    return taggedTitle;
-  }
-
-  const electronContext = event.contexts?.electron as
-    | Record<string, unknown>
-    | undefined;
-  const crashpadTitle = electronContext?.["crashpad.nexu.crash_title"];
-
-  return typeof crashpadTitle === "string" ? crashpadTitle : null;
-}
-
-function readNativeCrashTestKind(event: Sentry.Event): string | null {
-  const taggedKind =
-    typeof event.tags?.["nexu.crash_kind"] === "string"
-      ? event.tags["nexu.crash_kind"]
-      : null;
-
-  if (taggedKind) {
-    return taggedKind;
-  }
-
-  const electronContext = event.contexts?.electron as
-    | Record<string, unknown>
-    | undefined;
-  const crashpadKind = electronContext?.["crashpad.nexu.crash_kind"];
-
-  return typeof crashpadKind === "string" ? crashpadKind : null;
-}
-
-if (sentryDsn) {
-  const sentryBuildMetadata = getDesktopSentryBuildMetadata(
-    runtimeConfig.buildInfo,
-  );
-
-  Sentry.init({
-    dsn: sentryDsn,
-    environment: app.isPackaged ? "production" : "development",
-    release: sentryBuildMetadata.release,
-    ...(sentryBuildMetadata.dist ? { dist: sentryBuildMetadata.dist } : {}),
-    beforeSend(event) {
-      const testTitle = readNativeCrashTestTitle(event);
-
-      if (!testTitle) {
-        return event;
-      }
-
-      const testKind = readNativeCrashTestKind(event);
-      const firstException = event.exception?.values?.[0];
-      const updatedException = event.exception?.values
-        ? {
-            ...event.exception,
-            values: [
-              {
-                ...firstException,
-                type: "Error",
-                value: testTitle,
-              },
-              ...event.exception.values.slice(1),
-            ],
-          }
-        : {
-            values: [
-              {
-                type: "Error",
-                value: testTitle,
-              },
-            ],
-          };
-
-      return {
-        ...event,
-        message: testTitle,
-        exception: updatedException,
-        fingerprint: [testTitle],
-        tags: {
-          ...event.tags,
-          "nexu.crash_title": testTitle,
-          ...(testKind ? { "nexu.crash_kind": testKind } : {}),
-        },
-      };
-    },
-  });
-
-  Sentry.setContext("build", sentryBuildMetadata.buildContext);
-} else {
-  crashReporter.start({
-    companyName: "nexu",
-    productName: app.getName(),
-    submitURL: "https://127.0.0.1/desktop-crash-reporter-disabled",
-    uploadToServer: false,
-    compress: true,
-    ignoreSystemCrashHandler: false,
-    extra: {
-      environment: app.isPackaged ? "production" : "development",
-    },
-  });
-}
+// Upstream crash uploads are disabled for this derivative.
 
 let mainWindow: BrowserWindow | null = null;
 let residentTray: Tray | null = null;
@@ -604,10 +491,6 @@ function sendDesktopCommand(
   });
 }
 
-function sendHostDesktopCommand(command: HostDesktopCommand): void {
-  mainWindow?.webContents.send("host:desktop-command", command);
-}
-
 function showAboutDialog(): void {
   const version = app.getVersion();
   const detailLines = [
@@ -658,11 +541,6 @@ function installApplicationMenu(): void {
         click: () => sendDesktopCommand("openclaw", "full"),
       },
       { type: "separator" },
-      {
-        label: "Set Test Balance…",
-        click: () =>
-          sendHostDesktopCommand({ type: "develop:open-set-balance" }),
-      },
     ],
   };
 

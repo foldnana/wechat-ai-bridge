@@ -14,7 +14,7 @@
 - Moved `.github/workflows` to `upstream-reference/github-workflows` so upstream CI, publishing, community and promotion jobs cannot run on this repository.
 - Moved upstream CODEOWNERS to `upstream-reference/CODEOWNERS`.
 - Added product scope, roadmap, attribution and local-data ignore patterns.
-- Application code, internal package names, lockfile and runtime defaults otherwise remain inherited. Do not mistake the initialized repository for a finished or hardened product.
+- Application code and runtime defaults were initially imported unchanged. Subsequent product removals and validation are recorded in `docs/project/CLEANUP.md`; internal package names remain inherited.
 
 ## Updating the baseline
 

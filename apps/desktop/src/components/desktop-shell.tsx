@@ -11,7 +11,6 @@ import {
 } from "../lib/runtime-formatters";
 import { DiagnosticsPage } from "../pages/diagnostics-page";
 import { RuntimePage } from "../pages/runtime-page";
-import { DevelopSetBalanceDialog } from "./develop-set-balance-dialog";
 import { SurfaceButton } from "./surface-button";
 import { SurfaceFrame } from "./surface-frame";
 import { UpdateBanner } from "./update-banner";
@@ -25,7 +24,6 @@ export function DesktopShell() {
   const [activeSurface, setActiveSurface] = useState<DesktopSurface>(
     isPackaged ? "web" : "control",
   );
-  const [showSetBalanceDialog, setShowSetBalanceDialog] = useState(false);
   const [chromeMode, setChromeMode] = useState<DesktopChromeMode>(
     isPackaged ? "immersive" : "full",
   );
@@ -51,10 +49,6 @@ export function DesktopShell() {
         void checkForUpdates();
         return;
       }
-      if (command.type === "develop:open-set-balance") {
-        setShowSetBalanceDialog(true);
-        return;
-      }
       if (command.type === "setup:complete") {
         return;
       }
@@ -78,10 +72,6 @@ export function DesktopShell() {
           : "desktop-shell"
       }
     >
-      <DevelopSetBalanceDialog
-        open={showSetBalanceDialog}
-        onClose={() => setShowSetBalanceDialog(false)}
-      />
       <div className="window-drag-bar" />
       <aside className="desktop-sidebar">
         <div className="desktop-sidebar-brand">

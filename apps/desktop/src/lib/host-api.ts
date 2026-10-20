@@ -113,62 +113,6 @@ export async function queryRuntimeEvents(
   return result;
 }
 
-export async function getDesktopCloudStatus() {
-  return getHostBridge().invoke("desktop:get-cloud-status", undefined);
-}
-
-export async function getDesktopRewardsStatus() {
-  return getHostBridge().invoke("desktop:get-rewards-status", undefined);
-}
-
-export async function setDesktopRewardBalance(balance: number) {
-  return getHostBridge().invoke("desktop:set-reward-balance", { balance });
-}
-
-export async function notifyDesktopRewardsUpdated(): Promise<void> {
-  await getHostBridge().invoke("desktop:rewards-updated", undefined);
-}
-
-export async function createCloudProfile(profile: {
-  name: string;
-  cloudUrl: string;
-  linkUrl: string;
-}) {
-  return getHostBridge().invoke("desktop:create-cloud-profile", { profile });
-}
-
-export async function connectCloudProfile(name: string) {
-  return getHostBridge().invoke("desktop:connect-cloud-profile", { name });
-}
-
-export async function disconnectCloudProfile(name: string) {
-  return getHostBridge().invoke("desktop:disconnect-cloud-profile", { name });
-}
-
-export async function switchCloudProfile(name: string) {
-  return getHostBridge().invoke("desktop:switch-cloud-profile", { name });
-}
-
-export async function importCloudProfiles(
-  profiles: Array<{ name: string; cloudUrl: string; linkUrl: string }>,
-) {
-  return getHostBridge().invoke("desktop:import-cloud-profiles", { profiles });
-}
-
-export async function updateCloudProfile(
-  previousName: string,
-  profile: { name: string; cloudUrl: string; linkUrl: string },
-) {
-  return getHostBridge().invoke("desktop:update-cloud-profile", {
-    previousName,
-    profile,
-  });
-}
-
-export async function deleteCloudProfile(name: string) {
-  return getHostBridge().invoke("desktop:delete-cloud-profile", { name });
-}
-
 export async function getMiniMaxOauthStatus() {
   return getHostBridge().invoke("desktop:get-minimax-oauth-status", undefined);
 }

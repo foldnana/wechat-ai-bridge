@@ -82,25 +82,14 @@ export async function bootstrapController(
   );
 
   // Run independent prep tasks in parallel to shave off startup time.
-  // All three are independent: process cleanup, plugin files, cloud model fetch.
+  // Process cleanup and plugin preparation are independent.
   await Promise.all([
     container.openclawProcess.prepare(),
     container.openclawSyncService.ensureRuntimeModelPlugin(),
-    container.configStore
-      .prepareDesktopCloudModelsForBootstrap()
-      .catch(() => {}),
   ]);
 
   // Validate default model against available models before first sync
   await container.modelProviderService.ensureValidDefaultModel();
-
-  // Ensure bundled skills are on disk and the skill ledger is up to date
-  // BEFORE the first config push.  Without this, the compiled agent
-  // allowlist may be missing newly-bundled skills, causing them to be
-  // invisible to the running agent until a restart.
-  container.skillhubService.bootstrap();
-
-  container.channelFallbackService.start();
 
   container.wsClient.onGatewayShutdown(({ restartExpectedMs }) => {
     if (restartExpectedMs !== null) {

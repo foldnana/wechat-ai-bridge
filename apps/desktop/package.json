@@ -96,10 +96,6 @@
         "to": "runtime"
       },
       {
-        "from": "static/bundled-skills",
-        "to": "static/bundled-skills"
-      },
-      {
         "from": "../controller/static/platform-templates",
         "to": "static/platform-templates"
       },
@@ -174,12 +170,6 @@
     "dmg": {
       "size": "2g"
     },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "nexu-io",
-        "repo": "nexu"
-      }
-    ]
+    "publish": []
   }
 }

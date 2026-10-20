@@ -32,7 +32,10 @@ describe("OpenClawRuntimePluginWriter", () => {
   });
 
   it("skips symlinked .bin entries while copying plugin directories", async () => {
-    const pluginDir = path.join(env.runtimePluginTemplatesDir, "plugin-a");
+    const pluginDir = path.join(
+      env.runtimePluginTemplatesDir,
+      "openclaw-weixin",
+    );
     const nodeModulesDir = path.join(pluginDir, "node_modules");
     const realPackageDir = path.join(nodeModulesDir, "real-package");
     const realBinDir = path.join(rootDir, "shared-bin");
@@ -50,7 +53,7 @@ describe("OpenClawRuntimePluginWriter", () => {
       access(
         path.join(
           env.openclawExtensionsDir,
-          "plugin-a",
+          "openclaw-weixin",
           "node_modules",
           "real-package",
           "index.js",
@@ -61,7 +64,7 @@ describe("OpenClawRuntimePluginWriter", () => {
       access(
         path.join(
           env.openclawExtensionsDir,
-          "plugin-a",
+          "openclaw-weixin",
           "node_modules",
           ".bin",
         ),
@@ -70,7 +73,10 @@ describe("OpenClawRuntimePluginWriter", () => {
   });
 
   it("materializes non-.bin symlinks as real directories", async () => {
-    const pluginDir = path.join(env.runtimePluginTemplatesDir, "plugin-a");
+    const pluginDir = path.join(
+      env.runtimePluginTemplatesDir,
+      "openclaw-weixin",
+    );
     const sharedAssetsDir = path.join(rootDir, "shared-assets");
 
     await mkdir(pluginDir, { recursive: true });
@@ -83,7 +89,7 @@ describe("OpenClawRuntimePluginWriter", () => {
 
     const copiedPath = path.join(
       env.openclawExtensionsDir,
-      "plugin-a",
+      "openclaw-weixin",
       "shared-assets",
     );
     const copiedStat = await lstat(copiedPath);
@@ -104,11 +110,11 @@ describe("OpenClawRuntimePluginWriter", () => {
 
     const runtimePluginDir = path.join(
       env.runtimePluginTemplatesDir,
-      "whatsapp",
+      "openclaw-weixin",
     );
     const builtinPluginDir = path.join(
       env.openclawBuiltinExtensionsDir,
-      "whatsapp",
+      "openclaw-weixin",
     );
 
     await mkdir(runtimePluginDir, { recursive: true });
@@ -120,7 +126,7 @@ describe("OpenClawRuntimePluginWriter", () => {
     await writer.ensurePlugins();
 
     await expect(
-      access(path.join(env.openclawExtensionsDir, "whatsapp")),
+      access(path.join(env.openclawExtensionsDir, "openclaw-weixin")),
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
@@ -132,13 +138,16 @@ describe("OpenClawRuntimePluginWriter", () => {
 
     const runtimePluginDir = path.join(
       env.runtimePluginTemplatesDir,
-      "whatsapp",
+      "openclaw-weixin",
     );
     const builtinPluginDir = path.join(
       env.openclawBuiltinExtensionsDir,
-      "whatsapp",
+      "openclaw-weixin",
     );
-    const staleTargetDir = path.join(env.openclawExtensionsDir, "whatsapp");
+    const staleTargetDir = path.join(
+      env.openclawExtensionsDir,
+      "openclaw-weixin",
+    );
 
     await mkdir(runtimePluginDir, { recursive: true });
     await mkdir(builtinPluginDir, { recursive: true });
@@ -155,107 +164,10 @@ describe("OpenClawRuntimePluginWriter", () => {
     });
   });
 
-  it("prefers bundled qqbot over the legacy runtime plugin source", async () => {
-    const bundledPluginDir = path.join(
-      env.bundledRuntimePluginsDir,
-      "openclaw-qqbot",
-    );
+  it("copies the WeChat template without bundled IM connectors", async () => {
     const legacyPluginDir = path.join(
       env.runtimePluginTemplatesDir,
-      "openclaw-qqbot",
-    );
-
-    await mkdir(bundledPluginDir, { recursive: true });
-    await mkdir(legacyPluginDir, { recursive: true });
-    await writeFile(
-      path.join(bundledPluginDir, "manifest.txt"),
-      "bundled\n",
-      "utf8",
-    );
-    await writeFile(
-      path.join(legacyPluginDir, "manifest.txt"),
-      "legacy\n",
-      "utf8",
-    );
-
-    const writer = new OpenClawRuntimePluginWriter(env);
-    await writer.ensurePlugins();
-
-    expect(
-      await readFile(
-        path.join(env.openclawExtensionsDir, "openclaw-qqbot", "manifest.txt"),
-        "utf8",
-      ),
-    ).toBe("bundled\n");
-  });
-
-  it("keeps bundled qqbot runtime dependencies when materializing extensions", async () => {
-    const bundledPluginDir = path.join(
-      env.bundledRuntimePluginsDir,
-      "openclaw-qqbot",
-    );
-    const bundledSilkWasmDir = path.join(
-      bundledPluginDir,
-      "node_modules",
-      "silk-wasm",
-    );
-
-    await mkdir(bundledSilkWasmDir, { recursive: true });
-    await writeFile(
-      path.join(bundledSilkWasmDir, "package.json"),
-      '{ "name": "silk-wasm" }\n',
-      "utf8",
-    );
-
-    const writer = new OpenClawRuntimePluginWriter(env);
-    await writer.ensurePlugins();
-
-    expect(
-      await readFile(
-        path.join(
-          env.openclawExtensionsDir,
-          "openclaw-qqbot",
-          "node_modules",
-          "silk-wasm",
-          "package.json",
-        ),
-        "utf8",
-      ),
-    ).toContain('"name": "silk-wasm"');
-  });
-
-  it("prefers bundled wecom over the legacy runtime plugin source", async () => {
-    const bundledPluginDir = path.join(env.bundledRuntimePluginsDir, "wecom");
-    const legacyPluginDir = path.join(env.runtimePluginTemplatesDir, "wecom");
-
-    await mkdir(bundledPluginDir, { recursive: true });
-    await mkdir(legacyPluginDir, { recursive: true });
-    await writeFile(
-      path.join(bundledPluginDir, "manifest.txt"),
-      "bundled\n",
-      "utf8",
-    );
-    await writeFile(
-      path.join(legacyPluginDir, "manifest.txt"),
-      "legacy\n",
-      "utf8",
-    );
-
-    const writer = new OpenClawRuntimePluginWriter(env);
-    await writer.ensurePlugins();
-
-    expect(
-      await readFile(
-        path.join(env.openclawExtensionsDir, "wecom", "manifest.txt"),
-        "utf8",
-      ),
-    ).toBe("bundled\n");
-  });
-
-  it("still copies legacy plugins when no bundled runtime artifact exists", async () => {
-    const legacyPluginDir = path.join(
-      env.runtimePluginTemplatesDir,
-      "plugin-a",
+      "openclaw-weixin",
     );
 
     await mkdir(legacyPluginDir, { recursive: true });
@@ -265,7 +177,39 @@ describe("OpenClawRuntimePluginWriter", () => {
     await writer.ensurePlugins();
 
     await expect(
-      access(path.join(env.openclawExtensionsDir, "plugin-a", "index.js")),
+      access(
+        path.join(env.openclawExtensionsDir, "openclaw-weixin", "index.js"),
+      ),
     ).resolves.toBeUndefined();
+  });
+
+  it("keeps the model selection plugin but ignores unrelated plugin templates", async () => {
+    for (const name of [
+      "openclaw-weixin",
+      "nexu-runtime-model",
+      "langfuse-tracer",
+      "whatsapp",
+    ]) {
+      const source = path.join(env.runtimePluginTemplatesDir, name);
+      await mkdir(source, { recursive: true });
+      await writeFile(path.join(source, "index.js"), "export {};\n");
+    }
+    await new OpenClawRuntimePluginWriter(env).ensurePlugins();
+    await expect(
+      access(
+        path.join(env.openclawExtensionsDir, "nexu-runtime-model", "index.js"),
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      access(
+        path.join(env.openclawExtensionsDir, "openclaw-weixin", "index.js"),
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      access(path.join(env.openclawExtensionsDir, "langfuse-tracer")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      access(path.join(env.openclawExtensionsDir, "whatsapp")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

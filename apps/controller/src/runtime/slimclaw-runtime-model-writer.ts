@@ -14,9 +14,9 @@ const RUNTIME_MODEL_FALLBACK = "anthropic/claude-opus-4-6";
 export type NoModelMessageLocale = "en" | "zh-CN";
 
 const NO_MODEL_CONFIGURED_MESSAGES: Record<NoModelMessageLocale, string> = {
-  en: "No model is available right now. Please sign in to your Nexu Official account, or add your own API key or OAuth provider under Settings → Models to enable a model.",
+  en: "No model is configured. Add your own API key and select a model under API & Models.",
   "zh-CN":
-    "当前没有可用的模型。请登录 Nexu 官方账号，或在 设置 → 模型 中配置您自己的 API Key 或 OAuth 服务商以启用模型。",
+    "当前没有配置模型。请在「API 与模型」中填写自己的 API Key 并选择模型。",
 };
 
 export const NO_MODEL_CONFIGURED_MESSAGE = NO_MODEL_CONFIGURED_MESSAGES.en;

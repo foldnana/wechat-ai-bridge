@@ -15,20 +15,17 @@ export function resolveDesktopUpdateExperience(input: {
 
   return input.updateFeed ? "local-test-feed" : "local-validation";
 }
-
-export function shouldEnableDesktopUpdateManager(input: {
+export function shouldEnableDesktopUpdateManager(_input: {
   buildSource: DesktopBuildSource;
   updateFeed: string | null;
 }): boolean {
-  return resolveDesktopUpdateExperience(input) !== "local-validation";
+  return false;
 }
-
-export function shouldStartDesktopPeriodicUpdateChecks(input: {
+export function shouldStartDesktopPeriodicUpdateChecks(_input: {
   buildSource: DesktopBuildSource;
   updateFeed: string | null;
 }): boolean {
-  const experience = resolveDesktopUpdateExperience(input);
-  return experience === "normal" || experience === "local-test-feed";
+  return false;
 }
 
 export function getDesktopUpdateTestingGuideUrl(

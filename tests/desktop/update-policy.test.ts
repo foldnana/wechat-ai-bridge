@@ -28,7 +28,7 @@ describe("desktop update policy", () => {
     ).toBe(false);
   });
 
-  it("treats local-dist with an explicit feed as update test mode", () => {
+  it("keeps the updater disabled even with an explicit feed", () => {
     expect(
       resolveDesktopUpdateExperience({
         buildSource: "local-dist",
@@ -40,16 +40,16 @@ describe("desktop update policy", () => {
         buildSource: "local-dist",
         updateFeed: "https://example.test/latest-win.json",
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       shouldStartDesktopPeriodicUpdateChecks({
         buildSource: "local-dist",
         updateFeed: "https://example.test/latest-win.json",
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("keeps non-local builds on the normal update path", () => {
+  it("keeps the updater disabled in non-local builds", () => {
     expect(
       resolveDesktopUpdateExperience({
         buildSource: "nightly-prod",
@@ -61,13 +61,13 @@ describe("desktop update policy", () => {
         buildSource: "nightly-prod",
         updateFeed: null,
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       shouldStartDesktopPeriodicUpdateChecks({
         buildSource: "nightly-prod",
         updateFeed: null,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("builds a guide URL pinned to the packaged commit", () => {

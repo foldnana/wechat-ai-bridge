@@ -1,5 +1,4 @@
 import { ModelLogo, ProviderLogo } from "@/components/provider-logo";
-import { track } from "@/lib/tracking";
 import { cn } from "@/lib/utils";
 import { Check, ChevronDown, Cpu, Search, Settings } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -212,8 +211,6 @@ export function ModelPickerDropdown({
             closePicker();
             return;
           }
-
-          track("workspace_change_model_click");
           setExpandedProviders(resolveOpenGroups());
           setOpen(true);
         }}
@@ -451,7 +448,6 @@ export function ModelPickerDropdown({
                 type="button"
                 onClick={() => {
                   closePicker();
-                  track("workspace_configure_model_provider_click");
                   onOpenSettings();
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] text-text-secondary hover:bg-surface-2 transition-colors"

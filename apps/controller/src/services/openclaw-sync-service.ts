@@ -1,5 +1,5 @@
-import { selectPreferredModel } from "@nexu/shared";
 import type { OpenClawConfig } from "@nexu/shared";
+import { selectPreferredModel } from "@nexu/shared";
 import type { ControllerEnv } from "../app/env.js";
 import { logger } from "../lib/logger.js";
 import {
@@ -7,7 +7,6 @@ import {
   compileOpenClawConfig,
   resolveModelId,
 } from "../lib/openclaw-config-compiler.js";
-import type { CreditGuardStateWriter } from "../runtime/credit-guard-state-writer.js";
 import type { OpenClawAuthProfilesStore } from "../runtime/openclaw-auth-profiles-store.js";
 import type { OpenClawAuthProfilesWriter } from "../runtime/openclaw-auth-profiles-writer.js";
 import type { OpenClawConfigWriter } from "../runtime/openclaw-config-writer.js";
@@ -22,8 +21,6 @@ import type { CompiledOpenClawStore } from "../store/compiled-openclaw-store.js"
 import type { NexuConfigStore } from "../store/nexu-config-store.js";
 import type { NexuConfig } from "../store/schemas.js";
 import type { OpenClawGatewayService } from "./openclaw-gateway-service.js";
-import type { SkillDb } from "./skillhub/skill-db.js";
-import type { WorkspaceSkillScanner } from "./skillhub/workspace-skill-scanner.js";
 
 function resolvePrimaryModelRef(
   model: string | { primary: string } | undefined,
@@ -134,12 +131,9 @@ export class OpenClawSyncService {
     private readonly authProfilesStore: OpenClawAuthProfilesStore,
     private readonly runtimePluginWriter: OpenClawRuntimePluginWriter,
     private readonly runtimeModelWriter: OpenClawRuntimeModelWriter,
-    private readonly creditGuardStateWriter: CreditGuardStateWriter,
     private readonly templateWriter: WorkspaceTemplateWriter,
     private readonly watchTrigger: OpenClawWatchTrigger,
     private readonly gatewayService: OpenClawGatewayService,
-    private readonly skillDb: SkillDb | null = null,
-    private readonly workspaceScanner: WorkspaceSkillScanner | null = null,
   ) {}
 
   async compileCurrentConfig(): Promise<
@@ -147,27 +141,8 @@ export class OpenClawSyncService {
   > {
     const config = await this.configStore.getConfig();
     const oauthState = await this.authProfilesStore.getOAuthConnectionState();
-    const installedSlugs = this.skillDb
-      ? this.skillDb
-          .getAllInstalled()
-          .filter((r) => r.source !== "workspace")
-          .map((r) => r.slug)
-          .sort((left, right) => left.localeCompare(right))
-      : undefined;
 
-    const workspaceMap = this.workspaceScanner
-      ? this.workspaceScanner.scanAll(
-          config.bots.filter((b) => b.status === "active").map((b) => b.id),
-        )
-      : undefined;
-
-    return compileOpenClawConfig(
-      config,
-      this.env,
-      oauthState,
-      installedSlugs,
-      workspaceMap,
-    );
+    return compileOpenClawConfig(config, this.env, oauthState);
   }
 
   /**
@@ -258,7 +233,7 @@ export class OpenClawSyncService {
 
   async ensureRuntimeModelPlugin(): Promise<void> {
     await this.runtimePluginWriter.ensurePlugins();
-    await this.runtimeModelWriter.writeFallback();
+    await this.runtimeModelWriter.writeNoModelState();
   }
 
   /**
@@ -282,26 +257,8 @@ export class OpenClawSyncService {
     const seq = ++this.syncCounter;
     const config = await this.configStore.getConfig();
     const oauthState = await this.authProfilesStore.getOAuthConnectionState();
-    const installedSlugs = this.skillDb
-      ? this.skillDb
-          .getAllInstalled()
-          .filter((r) => r.source !== "workspace")
-          .map((r) => r.slug)
-      : undefined;
 
-    const workspaceMap = this.workspaceScanner
-      ? this.workspaceScanner.scanAll(
-          config.bots.filter((b) => b.status === "active").map((b) => b.id),
-        )
-      : undefined;
-
-    const rawCompiled = compileOpenClawConfig(
-      config,
-      this.env,
-      oauthState,
-      installedSlugs,
-      workspaceMap,
-    );
+    const rawCompiled = compileOpenClawConfig(config, this.env, oauthState);
 
     const hasAnyProvider =
       Object.keys(rawCompiled.models?.providers ?? {}).length > 0;
@@ -387,7 +344,6 @@ export class OpenClawSyncService {
         resolveNoModelConfiguredMessage(locale),
       );
     }
-    await this.creditGuardStateWriter.write(locale);
     await this.compiledStore.saveConfig(compiled);
 
     // 3. If OpenClaw is not connected yet, nudge the file watcher after the

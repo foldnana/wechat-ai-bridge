@@ -1,25 +1,11 @@
-import { GitHubStarCta } from "@/components/github-star-cta";
 import { ModelPickerDropdown } from "@/components/model-picker-dropdown";
 import { ModelLogo, ProviderLogo } from "@/components/provider-logo";
-import { useAutoUpdate } from "@/hooks/use-auto-update";
-import {
-  syncDesktopCloudQueries,
-  useDesktopCloudStatus,
-} from "@/hooks/use-desktop-cloud-status";
-import { useGitHubStars } from "@/hooks/use-github-stars";
 import { useLocale } from "@/hooks/use-locale";
-import { getAnalyticsAppMetadata } from "@/lib/analytics-app-metadata";
 import {
   openExternalUrl,
   openLocalFolderUrl,
   pathToFileUrl,
 } from "@/lib/desktop-links";
-import {
-  ANALYTICS_PREFERENCE_STORAGE_KEY,
-  disableAnalytics,
-  initializeAnalytics,
-  track,
-} from "@/lib/tracking";
 import { cn } from "@/lib/utils";
 import {
   type ProviderRegistryEntryDto,
@@ -32,19 +18,13 @@ import {
 } from "@nexu/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowUpRight,
   Check,
   ExternalLink,
   FolderOpen,
-  Globe,
-  Info,
   Loader2,
   LogIn,
-  Monitor,
   RefreshCw,
-  Shield,
   Trash2,
-  User,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -54,7 +34,6 @@ import { toast } from "sonner";
 import {
   deleteApiV1ModelProvidersMinimaxOauthLogin,
   getApiInternalDesktopDefaultModel,
-  getApiInternalDesktopPreferences,
   getApiInternalDesktopReady,
   getApiV1ModelProvidersByProviderIdOauthProviderStatus,
   getApiV1ModelProvidersByProviderIdOauthStatus,
@@ -62,10 +41,6 @@ import {
   getApiV1ModelProvidersMinimaxOauthStatus,
   getApiV1ModelProvidersRegistry,
   getApiV1Models,
-  patchApiInternalDesktopPreferences,
-  postApiInternalDesktopCloudConnect,
-  postApiInternalDesktopCloudDisconnect,
-  postApiInternalDesktopCloudRefresh,
   postApiV1ModelProvidersByProviderIdOauthDisconnect,
   postApiV1ModelProvidersByProviderIdOauthStart,
   postApiV1ModelProvidersByProviderIdValidate,
@@ -79,14 +54,6 @@ import type {
   PutApiV1ModelProvidersConfigData,
 } from "../../lib/api/types.gen";
 import { Button } from "../components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../components/ui/dialog";
 import { PageHeader } from "../components/ui/page-header";
 import {
   Select,
@@ -95,8 +62,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Switch } from "../components/ui/switch";
-import { markSetupComplete } from "./welcome";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -146,53 +111,6 @@ type MiniMaxDesktopOauthStatus = {
   region?: "global" | "cn" | null;
   error?: string | null;
 };
-
-type LogoutConfirmDialogProps = {
-  open: boolean;
-  title: string;
-  description: string;
-  confirmLabel: string;
-  cancelLabel: string;
-  pending: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
-};
-
-function LogoutConfirmDialog({
-  open,
-  title,
-  description,
-  confirmLabel,
-  cancelLabel,
-  pending,
-  onOpenChange,
-  onConfirm,
-}: LogoutConfirmDialogProps) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader className="border-b-0 pb-2">
-          <DialogTitle className="text-[16px]">{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <DialogFooter className="border-t-0 pt-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={pending}
-          >
-            {cancelLabel}
-          </Button>
-          <Button type="button" variant="destructive" onClick={onConfirm}>
-            {pending && <Loader2 className="animate-spin" />}
-            {confirmLabel}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 type MiniMaxDesktopOauthStartResult = MiniMaxDesktopOauthStatus & {
   started: boolean;
@@ -617,638 +535,6 @@ function createCustomProviderDraft(id: string): CustomProviderDraft {
   };
 }
 
-// ── Component ──────────────────────────────────────────────────
-
-function _GeneralSettings() {
-  const { t } = useTranslation();
-  const { locale, setLocale } = useLocale();
-  const update = useAutoUpdate();
-  const queryClient = useQueryClient();
-  const [appVersion, setAppVersion] = useState<string | null>(null);
-  const [accountConnecting, setAccountConnecting] = useState(false);
-  const [accountDisconnecting, setAccountDisconnecting] = useState(false);
-  const [showAccountLogoutConfirm, setShowAccountLogoutConfirm] =
-    useState(false);
-  const [crashReportsEnabled, setCrashReportsEnabled] = useState(true);
-  const hostBridge = getModelsHostInvokeBridge();
-  const { data: desktopCloudStatus, refetch: refetchDesktopCloudStatus } =
-    useDesktopCloudStatus();
-  const isWindowsPlatform =
-    typeof navigator !== "undefined" &&
-    navigator.userAgent.toLowerCase().includes("windows");
-  const showInShellLabel = isWindowsPlatform
-    ? t("settings.desktop.showInTaskbar")
-    : t("settings.desktop.showInDock");
-  const showInShellHint = isWindowsPlatform
-    ? t("settings.desktop.showInTaskbarHint")
-    : t("settings.desktop.showInDockHint");
-
-  const { data: shellPreferences } = useQuery({
-    queryKey: ["desktop-shell-preferences"],
-    queryFn: async () => {
-      if (!hostBridge) {
-        return null;
-      }
-
-      return hostBridge.invoke("desktop:get-shell-preferences", undefined);
-    },
-  });
-
-  const updateShellPreferences = useMutation({
-    mutationFn: async (input: {
-      launchAtLogin?: boolean;
-      showInDock?: boolean;
-    }) => {
-      if (!hostBridge) {
-        throw new Error("Desktop host bridge is unavailable.");
-      }
-
-      return hostBridge.invoke("desktop:update-shell-preferences", input);
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(["desktop-shell-preferences"], data);
-    },
-    onError: () => {
-      toast.error(t("settings.desktop.updateFailed"));
-    },
-  });
-
-  const { data: desktopPreferences } = useQuery({
-    queryKey: ["desktop-preferences"],
-    queryFn: async () => {
-      const { data } = await getApiInternalDesktopPreferences();
-      return data;
-    },
-  });
-
-  const updateDesktopPreferences = useMutation({
-    mutationFn: async (input: { analyticsEnabled: boolean }) => {
-      const response = await patchApiInternalDesktopPreferences({
-        body: { analyticsEnabled: input.analyticsEnabled },
-      });
-      if (!response.data) {
-        throw new Error("Desktop preferences update returned no data.");
-      }
-      return response.data;
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(["desktop-preferences"], data);
-      try {
-        localStorage.setItem(
-          ANALYTICS_PREFERENCE_STORAGE_KEY,
-          data.analyticsEnabled ? "1" : "0",
-        );
-      } catch {
-        // ignore local persistence failures
-      }
-
-      if (data.analyticsEnabled) {
-        const posthogApiKey = import.meta.env.VITE_POSTHOG_API_KEY;
-        if (posthogApiKey) {
-          const { appName, appVersion } = getAnalyticsAppMetadata();
-          initializeAnalytics({
-            apiKey: posthogApiKey,
-            apiHost: import.meta.env.VITE_POSTHOG_HOST,
-            environment: import.meta.env.MODE,
-            appName,
-            appVersion,
-          });
-        }
-      } else {
-        disableAnalytics();
-      }
-    },
-    onError: () => {
-      toast.error(t("settings.desktop.updateFailed"));
-    },
-  });
-
-  useEffect(() => {
-    const hostBridge = getModelsHostInvokeBridge();
-    if (!hostBridge) {
-      return;
-    }
-
-    let cancelled = false;
-    void hostBridge
-      .invoke("update:get-current-version", undefined)
-      .then((result) => {
-        if (!cancelled) {
-          setAppVersion(result.version);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAppVersion(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const cloudConnected = desktopCloudStatus?.connected ?? false;
-  const displayEmail =
-    desktopCloudStatus?.userEmail?.trim() || t("settings.general.loggedOut");
-  const accountActionBusy = accountConnecting || accountDisconnecting;
-  const updateAction = (() => {
-    switch (update.phase) {
-      case "checking":
-        return {
-          label: t("settings.updates.checking"),
-          onClick: () => void update.check(),
-          disabled: true,
-        };
-      case "available":
-        return {
-          label: t("layout.update.download"),
-          onClick: () => void update.download(),
-          disabled: false,
-        };
-      case "downloading":
-        return {
-          label: t("settings.updates.downloading", {
-            percent: Math.round(update.percent),
-          }),
-          onClick: () => void update.download(),
-          disabled: true,
-        };
-      case "installing":
-        return {
-          label: t("layout.update.installing"),
-          onClick: () => void update.install(),
-          disabled: true,
-        };
-      case "ready":
-        return {
-          label: t("layout.update.install"),
-          onClick: () => void update.install(),
-          disabled: false,
-        };
-      case "error":
-        return {
-          label: t("settings.updates.retry"),
-          onClick: () => void update.check(),
-          disabled: false,
-        };
-      default:
-        return {
-          label: t("settings.updates.checkNow"),
-          onClick: () => void update.check(),
-          disabled: false,
-        };
-    }
-  })();
-  const updateStatusText = (() => {
-    switch (update.phase) {
-      case "checking":
-        return t("settings.updates.checkingHint");
-      case "available":
-        return t("layout.update.available", {
-          version: update.version ?? appVersion ?? "",
-        });
-      case "downloading":
-        return t("settings.updates.downloadingHint", {
-          percent: Math.round(update.percent),
-        });
-      case "installing":
-        return t("layout.update.installing");
-      case "ready":
-        return t("layout.update.readyToInstall");
-      case "error":
-        return update.errorMessage ?? t("settings.updates.error");
-      default:
-        return appVersion ? null : t("settings.updates.versionUnknown");
-    }
-  })();
-
-  useEffect(() => {
-    if (!accountConnecting) {
-      return;
-    }
-
-    const interval = window.setInterval(async () => {
-      try {
-        const result = await refetchDesktopCloudStatus();
-        if (result.data?.connected) {
-          setAccountConnecting(false);
-          await syncDesktopCloudQueries(queryClient);
-        }
-      } catch {
-        /* ignore */
-      }
-    }, 2000);
-
-    return () => window.clearInterval(interval);
-  }, [accountConnecting, queryClient, refetchDesktopCloudStatus]);
-
-  const handleAccountLogin = async () => {
-    if (accountActionBusy) {
-      return;
-    }
-
-    track("welcome_option_click", { option: "nexu_account" });
-    setAccountConnecting(true);
-
-    try {
-      let { data } = await postApiInternalDesktopCloudConnect({
-        body: { source: "settings" },
-      });
-
-      if (data?.error === "Already connected. Disconnect first.") {
-        await syncDesktopCloudQueries(queryClient);
-        setAccountConnecting(false);
-        return;
-      }
-
-      if (data?.error) {
-        await postApiInternalDesktopCloudDisconnect().catch(() => {});
-        ({ data } = await postApiInternalDesktopCloudConnect({
-          body: { source: "settings" },
-        }));
-      }
-
-      if (data?.error) {
-        toast.error(data.error ?? t("welcome.connectFailed"));
-        setAccountConnecting(false);
-        return;
-      }
-
-      if (data?.browserUrl) {
-        await openExternalUrl(data.browserUrl);
-        toast.info(t("welcome.browserOpened"));
-        return;
-      }
-
-      const result = await refetchDesktopCloudStatus();
-      if (result.data?.connected) {
-        await syncDesktopCloudQueries(queryClient);
-        setAccountConnecting(false);
-        return;
-      }
-
-      setAccountConnecting(false);
-    } catch {
-      toast.error(t("welcome.cloudConnectError"));
-      setAccountConnecting(false);
-    }
-  };
-
-  const handleAccountLogout = async () => {
-    if (accountActionBusy) {
-      return;
-    }
-
-    setAccountDisconnecting(true);
-    try {
-      await postApiInternalDesktopCloudDisconnect().catch(() => {});
-      await syncDesktopCloudQueries(queryClient);
-      setShowAccountLogoutConfirm(false);
-    } finally {
-      setAccountDisconnecting(false);
-    }
-  };
-
-  return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="overflow-hidden rounded-xl border border-border bg-surface-1">
-        <div className="border-b border-border px-5 py-4">
-          <div className="flex items-center gap-2">
-            <User size={14} className="text-text-secondary" />
-            <div className="text-[13px] font-semibold text-text-primary">
-              {t("settings.general.account")}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center justify-between gap-4 px-5 py-4">
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[12px] font-medium text-text-primary">
-              {displayEmail}
-            </div>
-            <div className="mt-0.5 text-[11px] text-text-tertiary">
-              {cloudConnected
-                ? t("settings.general.emailHint")
-                : t("settings.general.loggedOutHint")}
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={accountActionBusy}
-            onClick={() =>
-              void (cloudConnected
-                ? setShowAccountLogoutConfirm(true)
-                : handleAccountLogin())
-            }
-          >
-            {accountActionBusy
-              ? t("common.loading")
-              : cloudConnected
-                ? t("layout.signOut")
-                : t("settings.general.goLogin")}
-          </Button>
-        </div>
-      </div>
-
-      <LogoutConfirmDialog
-        open={showAccountLogoutConfirm}
-        onOpenChange={setShowAccountLogoutConfirm}
-        pending={accountDisconnecting}
-        title={t("settings.general.logoutConfirmTitle")}
-        description={t("settings.general.logoutConfirmDescription")}
-        confirmLabel={t("layout.signOut")}
-        cancelLabel={t("common.cancel")}
-        onConfirm={() => void handleAccountLogout()}
-      />
-
-      <div className="overflow-hidden rounded-xl border border-border bg-surface-1">
-        <div className="border-b border-border px-5 py-4">
-          <div className="flex items-center gap-2">
-            <Globe size={14} className="text-text-secondary" />
-            <div className="text-[13px] font-semibold text-text-primary">
-              {t("settings.general.language")}
-            </div>
-          </div>
-        </div>
-        <div className="px-5 py-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="min-w-0 flex-1">
-              <div className="text-[12px] font-medium text-text-primary">
-                {t("settings.general.language")}
-              </div>
-              <div className="mt-0.5 text-[11px] text-text-tertiary">
-                {t("settings.general.languageHint")}
-              </div>
-            </div>
-            <div className="w-full md:w-[220px] md:shrink-0">
-              <Select
-                value={locale}
-                onValueChange={(value) => setLocale(value as "en" | "zh")}
-              >
-                <SelectTrigger className="h-11 w-full rounded-xl border-border bg-surface-0 px-4 text-[13px] font-medium text-text-primary shadow-none hover:bg-surface-1">
-                  <SelectValue>
-                    {locale === "zh" ? "中文" : "English"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent
-                  align="end"
-                  className="rounded-2xl border-border bg-surface-0 text-text-primary shadow-[0_12px_32px_rgba(0,0,0,0.08)]"
-                >
-                  <SelectItem
-                    value="zh"
-                    className="rounded-xl px-4 py-2 text-[13px] text-text-secondary focus:bg-surface-2 focus:text-text-primary data-[state=checked]:bg-surface-2 data-[state=checked]:text-text-primary"
-                  >
-                    中文
-                  </SelectItem>
-                  <SelectItem
-                    value="en"
-                    className="rounded-xl px-4 py-2 text-[13px] text-text-secondary focus:bg-surface-2 focus:text-text-primary data-[state=checked]:bg-surface-2 data-[state=checked]:text-text-primary"
-                  >
-                    English
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {shellPreferences &&
-      (shellPreferences.supportsLaunchAtLogin ||
-        shellPreferences.supportsShowInDock) ? (
-        <div className="overflow-hidden rounded-xl border border-border bg-surface-1">
-          <div className="border-b border-border px-5 py-4">
-            <div className="flex items-center gap-2">
-              <Monitor size={14} className="text-text-secondary" />
-              <div className="text-[13px] font-semibold text-text-primary">
-                {t("settings.section.desktop")}
-              </div>
-            </div>
-          </div>
-          <div className="divide-y divide-border">
-            {shellPreferences.supportsLaunchAtLogin ? (
-              <div className="flex items-center justify-between gap-4 px-5 py-4">
-                <div className="min-w-0 flex-1">
-                  <div className="text-[12px] font-medium text-text-primary">
-                    {t("settings.desktop.launchAtLogin")}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-text-tertiary">
-                    {t("settings.desktop.launchAtLoginHint")}
-                  </div>
-                </div>
-                <Switch
-                  checked={shellPreferences.launchAtLogin}
-                  disabled={updateShellPreferences.isPending}
-                  onCheckedChange={(checked) => {
-                    void updateShellPreferences.mutateAsync({
-                      launchAtLogin: checked,
-                    });
-                  }}
-                />
-              </div>
-            ) : null}
-
-            {shellPreferences.supportsShowInDock ? (
-              <div className="flex items-center justify-between gap-4 px-5 py-4">
-                <div className="min-w-0 flex-1">
-                  <div className="text-[12px] font-medium text-text-primary">
-                    {showInShellLabel}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-text-tertiary">
-                    {showInShellHint}
-                  </div>
-                </div>
-                <Switch
-                  checked={shellPreferences.showInDock}
-                  disabled={updateShellPreferences.isPending}
-                  onCheckedChange={(checked) => {
-                    void updateShellPreferences.mutateAsync({
-                      showInDock: checked,
-                    });
-                  }}
-                />
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="overflow-hidden rounded-xl border border-border bg-surface-1">
-        <div className="border-b border-border px-5 py-4">
-          <div className="flex items-center gap-2">
-            <Shield size={14} className="text-text-secondary" />
-            <div className="text-[13px] font-semibold text-text-primary">
-              {t("settings.section.data")}
-            </div>
-          </div>
-        </div>
-        <div className="divide-y divide-border">
-          <div className="flex items-center justify-between gap-4 px-5 py-4">
-            <div className="min-w-0 flex-1">
-              <div className="text-[12px] font-medium text-text-primary">
-                {t("settings.data.analytics")}
-              </div>
-              <div className="mt-0.5 text-[11px] text-text-tertiary">
-                {t("settings.data.analyticsHint")}
-              </div>
-            </div>
-            <Switch
-              checked={desktopPreferences?.analyticsEnabled ?? true}
-              disabled={updateDesktopPreferences.isPending}
-              onCheckedChange={(checked) => {
-                void updateDesktopPreferences.mutateAsync({
-                  analyticsEnabled: checked,
-                });
-              }}
-            />
-          </div>
-
-          <div className="flex items-center justify-between gap-4 px-5 py-4">
-            <div className="min-w-0 flex-1">
-              <div className="text-[12px] font-medium text-text-primary">
-                {t("settings.data.crashReports")}
-              </div>
-              <div className="mt-0.5 text-[11px] text-text-tertiary">
-                {t("settings.data.crashReportsHint")}
-              </div>
-            </div>
-            <Switch
-              checked={crashReportsEnabled}
-              onCheckedChange={setCrashReportsEnabled}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-border bg-surface-1">
-        <div className="border-b border-border px-5 py-4">
-          <div className="flex items-center gap-2">
-            <RefreshCw size={14} className="text-text-secondary" />
-            <div className="text-[13px] font-semibold text-text-primary">
-              {t("settings.section.updates")}
-            </div>
-          </div>
-        </div>
-        <div className="px-5 py-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="text-[12px] font-medium text-text-primary">
-                {t("settings.updates.version")}
-              </div>
-              <div className="mt-0.5 text-[11px] text-text-tertiary">
-                {appVersion ?? "—"}
-              </div>
-              {updateStatusText ? (
-                <div
-                  className={cn(
-                    "mt-2 text-[11px]",
-                    update.phase === "error"
-                      ? "text-[var(--color-danger)]"
-                      : "text-text-tertiary",
-                  )}
-                >
-                  {updateStatusText}
-                </div>
-              ) : null}
-              {(update.phase === "downloading" ||
-                update.phase === "installing") && (
-                <div className="mt-3 h-1.5 w-full max-w-[240px] overflow-hidden rounded-full bg-border">
-                  <div
-                    className="h-full rounded-full bg-[var(--color-brand-primary)] transition-all duration-300 ease-out"
-                    style={{
-                      width:
-                        update.phase === "installing"
-                          ? "100%"
-                          : `${Math.round(update.percent)}%`,
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={updateAction.disabled}
-              onClick={updateAction.onClick}
-            >
-              {update.phase === "checking" ||
-              update.phase === "downloading" ||
-              update.phase === "installing" ? (
-                <Loader2 className="animate-spin" />
-              ) : null}
-              {updateAction.label}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-border bg-surface-1">
-        <div className="border-b border-border px-5 py-4">
-          <div className="flex items-center gap-2">
-            <Info size={14} className="text-text-secondary" />
-            <div className="text-[13px] font-semibold text-text-primary">
-              {t("settings.section.about")}
-            </div>
-          </div>
-        </div>
-        <div className="px-5 py-4">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent/10 to-accent/5">
-              <img
-                src="/brand/logo-black-1.svg"
-                alt="nexu"
-                className="h-6 w-6 object-contain"
-              />
-            </div>
-            <div>
-              <div className="text-[13px] font-semibold text-text-primary">
-                nexu
-              </div>
-              <div className="text-[11px] text-text-tertiary">
-                {appVersion ?? "Desktop client"}
-              </div>
-            </div>
-          </div>
-          <div className="space-y-1">
-            {[
-              { label: t("settings.about.docs"), url: "https://docs.nexu.io" },
-              {
-                label: t("settings.about.github"),
-                url: "https://github.com/nexu-io/nexu",
-              },
-              {
-                label: t("settings.about.changelog"),
-                url: "https://github.com/nexu-io/nexu/releases",
-              },
-              {
-                label: t("settings.about.feedback"),
-                url: "https://github.com/nexu-io/nexu/issues/new",
-              },
-            ].map((link) => (
-              <button
-                key={link.label}
-                type="button"
-                onClick={() => void openExternalUrl(link.url)}
-                className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-[12px] font-medium text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
-              >
-                <ExternalLink size={13} className="shrink-0 text-text-muted" />
-                {link.label}
-                <ArrowUpRight
-                  size={10}
-                  className="ml-auto shrink-0 text-text-muted"
-                />
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // _CurrentModelSelector removed — model switching now lives inline in each provider's model list
 
 function AddCustomProviderDetail({
@@ -1422,7 +708,6 @@ function AddCustomProviderDetail({
 
 export function ModelsPage() {
   const { t } = useTranslation();
-  const { stars: starNexu } = useGitHubStars();
   const isDesktopClient = useMemo(
     () =>
       typeof navigator !== "undefined" &&
@@ -1439,7 +724,7 @@ export function ModelsPage() {
       : "general";
   const providerParam = searchParams.get("provider");
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(
-    providerParam ?? (isSetupMode ? "anthropic" : null),
+    providerParam ?? "deepseek",
   );
   const [customProviderDrafts, setCustomProviderDrafts] = useState<
     CustomProviderDraft[]
@@ -1447,11 +732,7 @@ export function ModelsPage() {
 
   const queryClient = useQueryClient();
 
-  const {
-    data: modelsData,
-    isLoading: modelsLoading,
-    isError: modelsError,
-  } = useQuery({
+  const { data: modelsData } = useQuery({
     queryKey: ["models"],
     queryFn: async () => {
       const { data } = await getApiV1Models();
@@ -1588,16 +869,7 @@ export function ModelsPage() {
       }
       toast.success(t("models.modelSwitched"), { id: toastId });
     },
-    onSuccess: (_, modelId) => {
-      track("workspace_change_model_change", {
-        previous_provider_name: getProviderIdFromModelId(
-          models,
-          currentModelId,
-        ),
-        previous_model_name: currentModelId || null,
-        provider_name: getProviderIdFromModelId(models, modelId),
-        model_name: modelId,
-      });
+    onSuccess: (_) => {
       queryClient.invalidateQueries({ queryKey: ["desktop-default-model"] });
     },
   });
@@ -1682,17 +954,6 @@ export function ModelsPage() {
   // Build sidebar items: Nexu first, then built-in BYOK, then custom BYOK
   const sidebarItems = useMemo(() => {
     const items: SidebarItem[] = [];
-
-    // Nexu official — always shown
-    const nexuProvider = providers.find((p) => p.id === "nexu");
-    items.push({
-      id: "nexu",
-      name: "nexu Official",
-      modelCount: nexuProvider?.models.length ?? 0,
-      configured: (nexuProvider?.models.length ?? 0) > 0,
-      managed: true,
-      kind: "managed",
-    });
 
     // Built-in BYOK providers — always listed
     for (const provider of visibleRegistryProviders) {
@@ -1853,27 +1114,17 @@ export function ModelsPage() {
             title={t("models.pageTitle")}
             description={t("models.pageSubtitle")}
             actions={
-              <>
-                <GitHubStarCta
-                  label={t("home.starGithub")}
-                  stars={starNexu}
-                  variant="button"
-                  onClick={() =>
-                    track("workspace_github_click", { source: "settings" })
-                  }
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void handleOpenWorkspace();
-                  }}
-                >
-                  <FolderOpen size={13} />
-                  {t("settings.providers.workspace")}
-                </Button>
-              </>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void handleOpenWorkspace();
+                }}
+              >
+                <FolderOpen size={13} />
+                {t("settings.providers.workspace")}
+              </Button>
             }
           />
 
@@ -2023,52 +1274,7 @@ export function ModelsPage() {
 
               <div className="flex-1 overflow-y-auto p-5">
                 {activeProvider ? (
-                  activeProvider.managed ? (
-                    modelsLoading ? (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="text-[13px] text-text-muted">
-                          {t("models.loading")}
-                        </div>
-                      </div>
-                    ) : modelsError ? (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="text-center">
-                          <div className="text-[13px] text-red-500 mb-2">
-                            {t("models.loadFailed")}
-                          </div>
-                          <p className="text-[12px] text-text-muted mb-3">
-                            {t("models.loadFailedHint")}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              queryClient.invalidateQueries({
-                                queryKey: ["models"],
-                              })
-                            }
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium bg-surface-2 hover:bg-surface-3 text-text-primary transition-colors"
-                          >
-                            <RefreshCw size={12} />
-                            {t("models.retry")}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <ManagedProviderDetail
-                        provider={
-                          providers.find((p) => p.id === activeProvider.id) ?? {
-                            id: activeProvider.id,
-                            name: activeProvider.name,
-                            description: "models.provider.nexu.description",
-                            managed: true,
-                            models: [],
-                          }
-                        }
-                        currentModelId={currentModelId}
-                        onSelectModel={(modelId) => updateModel.mutate(modelId)}
-                      />
-                    )
-                  ) : providerConfigDoc === undefined ? (
+                  providerConfigDoc === undefined ? (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-[13px] text-text-muted">
                         {t("models.loading")}
@@ -2172,297 +1378,6 @@ export function ModelsPage() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-// ── Managed provider detail (Nexu Official) ───────────────────
-
-function ManagedProviderDetail({
-  provider,
-  currentModelId,
-  onSelectModel,
-}: {
-  provider: ProviderConfig;
-  currentModelId: string;
-  onSelectModel: (modelId: string) => void;
-}) {
-  const { t } = useTranslation();
-
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [loginBusy, setLoginBusy] = useState(false);
-  const [cloudDisconnecting, setCloudDisconnecting] = useState(false);
-  const [showCloudLogoutConfirm, setShowCloudLogoutConfirm] = useState(false);
-  const queryClient = useQueryClient();
-  const { data: desktopCloudStatus, refetch: refetchDesktopCloudStatus } =
-    useDesktopCloudStatus();
-  const cloudConnected = desktopCloudStatus?.connected ?? false;
-  const refreshCloudModels = useMutation({
-    mutationFn: async () => {
-      await postApiInternalDesktopCloudRefresh();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["models"] });
-      queryClient.invalidateQueries({ queryKey: ["desktop-default-model"] });
-      toast.success(t("models.managed.refreshSucceeded"));
-    },
-    onError: () => {
-      toast.error(t("models.managed.refreshFailed"));
-    },
-  });
-
-  // Poll cloud-status while waiting for browser login
-  useEffect(() => {
-    if (!loginBusy) return;
-    const interval = setInterval(async () => {
-      try {
-        const result = await refetchDesktopCloudStatus();
-        if (result.data?.connected) {
-          setLoginBusy(false);
-          await syncDesktopCloudQueries(queryClient);
-        }
-      } catch {
-        /* ignore */
-      }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [loginBusy, queryClient, refetchDesktopCloudStatus]);
-
-  const handleLogin = async () => {
-    setLoginBusy(true);
-    setLoginError(null);
-    try {
-      let { data } = await postApiInternalDesktopCloudConnect();
-      // If a stale polling session exists, disconnect and retry once. Keep the
-      // current flow when another tab/process is already waiting for completion.
-      if (
-        data?.error &&
-        data.error !== "Connection attempt already in progress" &&
-        data.error !== "Already connected. Disconnect first."
-      ) {
-        await postApiInternalDesktopCloudDisconnect().catch(() => {});
-        ({ data } = await postApiInternalDesktopCloudConnect());
-      }
-      if (data?.error === "Already connected. Disconnect first.") {
-        await syncDesktopCloudQueries(queryClient);
-        setLoginBusy(false);
-        return;
-      }
-      // Another surface/process already kicked off login — treat as pending and
-      // let the polling effect detect completion instead of dropping the user
-      // into an error state.
-      if (data?.error === "Connection attempt already in progress") {
-        return;
-      }
-      if (data?.error) {
-        setLoginError(data.error ?? t("welcome.connectFailed"));
-        setLoginBusy(false);
-        return;
-      }
-      if (data?.browserUrl) {
-        window.open(data.browserUrl, "_blank", "noopener,noreferrer");
-      }
-      // Keep loginBusy=true — polling effect will detect completion.
-    } catch {
-      setLoginError(t("welcome.cloudConnectError"));
-      setLoginBusy(false);
-    }
-  };
-
-  const handleCancelLogin = async () => {
-    try {
-      await postApiInternalDesktopCloudDisconnect();
-      await syncDesktopCloudQueries(queryClient);
-    } catch {
-      // ignore
-    }
-    setLoginBusy(false);
-    setLoginError(null);
-  };
-
-  const handleCloudLogout = async () => {
-    if (cloudDisconnecting) {
-      return;
-    }
-    setCloudDisconnecting(true);
-    try {
-      await postApiInternalDesktopCloudDisconnect().catch(() => {});
-      await syncDesktopCloudQueries(queryClient);
-      setShowCloudLogoutConfirm(false);
-    } finally {
-      setCloudDisconnecting(false);
-    }
-  };
-
-  const cloudToggleBusy = loginBusy || cloudDisconnecting;
-
-  return (
-    <div>
-      {/* Header + cloud connection text action */}
-      <div className="flex items-start justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="w-8 h-8 rounded-lg flex items-center justify-center bg-surface-2 shrink-0">
-            <ProviderLogo provider={provider.id} size={20} />
-          </span>
-          <div className="min-w-0">
-            <div className="text-[14px] font-semibold text-text-primary">
-              {provider.name}
-            </div>
-            <div className="text-[11px] text-text-tertiary">
-              {t(provider.description)}
-            </div>
-          </div>
-        </div>
-        {(cloudConnected || loginBusy) && (
-          <button
-            type="button"
-            disabled={cloudToggleBusy}
-            aria-busy={cloudToggleBusy}
-            aria-label={
-              cloudConnected
-                ? t("models.managed.cloudDisconnectAria")
-                : t("models.managed.cloudConnectAria")
-            }
-            onClick={async () => {
-              if (cloudConnected) {
-                setShowCloudLogoutConfirm(true);
-              }
-            }}
-            className="inline-flex items-center gap-1.5 text-[11px] font-medium shrink-0 rounded-lg border border-border px-2.5 py-1 transition-colors cursor-pointer text-text-secondary hover:text-text-primary hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {(cloudDisconnecting || loginBusy) && (
-              <Loader2 size={12} className="animate-spin shrink-0" />
-            )}
-            <span className="truncate">
-              {loginBusy
-                ? t("models.managed.waitingLogin")
-                : t("models.managed.connected")}
-            </span>
-          </button>
-        )}
-      </div>
-
-      <LogoutConfirmDialog
-        open={showCloudLogoutConfirm}
-        onOpenChange={setShowCloudLogoutConfirm}
-        pending={cloudDisconnecting}
-        title={t("models.managed.logoutConfirmTitle")}
-        description={t("models.managed.logoutConfirmDescription")}
-        confirmLabel={t("models.managed.connected")}
-        cancelLabel={t("common.cancel")}
-        onConfirm={() => void handleCloudLogout()}
-      />
-
-      {/* Login prompt */}
-      {!cloudConnected && (
-        <div className="rounded-xl border border-[var(--color-brand-primary)]/25 bg-[var(--color-brand-subtle)] px-4 py-4 mb-6">
-          <div className="text-[13px] font-semibold text-[var(--color-brand-primary)]">
-            {t("models.managed.loginPrompt")}
-          </div>
-          <div className="text-[12px] leading-[1.7] text-text-secondary mt-1.5">
-            {t("models.managed.loginDescription")}
-          </div>
-          {loginBusy ? (
-            <div className="mt-4 flex items-center gap-3">
-              <div className="inline-flex items-center gap-2 rounded-lg bg-accent/80 px-3.5 py-2 text-[12px] font-medium text-white">
-                <Loader2 size={13} className="animate-spin" />
-                {t("models.managed.waitingLogin")}
-              </div>
-              <button
-                type="button"
-                onClick={() => void handleCancelLogin()}
-                className="text-[12px] text-text-muted hover:text-text-primary transition-colors cursor-pointer"
-              >
-                {t("common.cancel")}
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void handleLogin()}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-[12px] font-medium text-accent-fg transition-colors hover:bg-accent/90 cursor-pointer"
-            >
-              {t("models.managed.loginButton")}
-              <ArrowUpRight size={13} />
-            </button>
-          )}
-          {loginError && (
-            <p className="mt-2 text-[11px] text-red-500">{loginError}</p>
-          )}
-        </div>
-      )}
-
-      {/* Cloud models — clickable to switch active model */}
-      {provider.models.length > 0 && (
-        <div className="mb-6 pt-5 border-t border-border-subtle">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
-              {t("models.managed.availableModels")}
-              <span className="ml-1.5 normal-case tracking-normal">
-                ({provider.models.length})
-              </span>
-            </div>
-            {cloudConnected && (
-              <button
-                type="button"
-                onClick={() => {
-                  refreshCloudModels.mutate();
-                }}
-                disabled={refreshCloudModels.isPending}
-                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
-              >
-                <RefreshCw
-                  size={10}
-                  className={cn(refreshCloudModels.isPending && "animate-spin")}
-                />
-                {t("models.managed.refreshModelList")}
-              </button>
-            )}
-          </div>
-          <div className="space-y-0.5">
-            {provider.models.map((model) => {
-              const isSelected = isModelSelected(model.id, currentModelId);
-              return (
-                <button
-                  key={model.id}
-                  type="button"
-                  onClick={() => {
-                    if (!isSelected) onSelectModel(model.id);
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors",
-                    isSelected ? "bg-surface-2" : "hover:bg-surface-2",
-                  )}
-                >
-                  <span className="w-6 h-6 rounded-md flex items-center justify-center shrink-0 bg-white border border-border-subtle">
-                    <ModelLogo
-                      model={model.id}
-                      provider={provider.id}
-                      size={14}
-                    />
-                  </span>
-                  <span
-                    className={cn(
-                      "flex-1 text-[12px] truncate",
-                      isSelected
-                        ? "font-semibold text-text-primary"
-                        : "font-medium text-text-primary",
-                    )}
-                  >
-                    {model.name}
-                  </span>
-                  {isSelected && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-text-secondary shrink-0">
-                      <Check size={12} />
-                      Active
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -2596,7 +1511,6 @@ function ByokProviderDetail({
       queryClient.invalidateQueries({ queryKey: ["models"] });
       queryClient.invalidateQueries({ queryKey: ["desktop-default-model"] });
       toast.success(t("models.byok.oauthSuccess"));
-      markSetupComplete();
     } else if (flowDataStatus === "failed") {
       setOauthPending(false);
       toast.error(flowDataError ?? t("models.byok.oauthFailed"));
@@ -2734,7 +1648,6 @@ function ByokProviderDetail({
       }),
     onSuccess: () => {
       setCodingPlanKey("");
-      markSetupComplete();
       const preferred = selectPreferredModel(ZAI_CODING_PLAN_MODELS);
       if (preferred) {
         onAutoSelectModel(preferred);
@@ -2778,21 +1691,12 @@ function ByokProviderDetail({
         baseUrl || undefined,
       ),
     onSuccess: (result) => {
-      track("workspace_provider_check", {
-        provider_name: providerId,
-        success: result.valid,
-      });
       const modelIds = normalizeVerifiedModelIds(result.models);
       if (result.valid) {
         setVerifiedModels(modelIds);
       }
     },
-    onError: () => {
-      track("workspace_provider_check", {
-        provider_name: providerId,
-        success: false,
-      });
-    },
+    onError: () => {},
   });
 
   const refreshModelsMutation = useMutation({
@@ -2847,12 +1751,8 @@ function ByokProviderDetail({
       return { models };
     },
     onSuccess: ({ models }) => {
-      track("workspace_provider_save", {
-        provider_name: providerId,
-      });
       setApiKey("");
       setIsEditingApiKey(false);
-      markSetupComplete();
       // Auto-select preferred model if no model is currently selected
       const preferred = selectPreferredModel(models);
       if (preferred) {
@@ -3615,6 +2515,31 @@ function ByokProviderDetail({
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+function _GeneralSettings() {
+  const { locale, setLocale } = useLocale();
+  return (
+    <div className="space-y-4 rounded-xl border border-border p-5">
+      <h2 className="font-medium">软件设置</h2>
+      <label className="flex items-center gap-4">
+        界面语言
+        <select
+          value={locale}
+          onChange={(event) =>
+            setLocale(event.target.value === "zh" ? "zh" : "en")
+          }
+          className="rounded border border-border bg-surface-0 p-2"
+        >
+          <option value="zh">简体中文</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <p className="text-sm text-text-secondary">
+        API 费用由模型服务商收取。本版本未启用上游统计、云账号和自动更新。
+      </p>
     </div>
   );
 }
