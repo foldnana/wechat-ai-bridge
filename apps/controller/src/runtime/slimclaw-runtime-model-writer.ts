@@ -1,4 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ControllerEnv } from "../app/env.js";
 import { logger } from "../lib/logger.js";
@@ -8,6 +9,7 @@ export interface OpenClawRuntimeModelState {
   promptNotice: string;
   noModelMessage: string | null;
   updatedAt: string;
+  userPresets?: Record<string, string>;
 }
 
 const RUNTIME_MODEL_FALLBACK = "anthropic/claude-opus-4-6";
@@ -55,11 +57,13 @@ export class OpenClawRuntimeModelWriter {
       },
       "runtime_model_write_begin",
     );
+    const temporaryPath = `${this.env.openclawRuntimeModelStatePath}.${randomUUID()}.tmp`;
     await writeFile(
-      this.env.openclawRuntimeModelStatePath,
+      temporaryPath,
       `${JSON.stringify(payload, null, 2)}\n`,
       "utf8",
     );
+    await rename(temporaryPath, this.env.openclawRuntimeModelStatePath);
     logger.info(
       {
         path: this.env.openclawRuntimeModelStatePath,
@@ -70,12 +74,16 @@ export class OpenClawRuntimeModelWriter {
     );
   }
 
-  async write(selectedModelRef: string): Promise<void> {
+  async write(
+    selectedModelRef: string,
+    userPresets: Record<string, string> = {},
+  ): Promise<void> {
     await this.writeState({
       selectedModelRef,
       promptNotice: buildPromptNotice(selectedModelRef),
       noModelMessage: null,
       updatedAt: new Date().toISOString(),
+      userPresets,
     });
   }
 

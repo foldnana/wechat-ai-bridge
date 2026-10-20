@@ -262,12 +262,12 @@ describe("openclaw plist: real function output", () => {
 // =========================================================================
 
 describe("runtime-config NEXU_HOME resolution chain", () => {
-  it("no env → defaults to ~/.nexu", async () => {
+  it("no env → defaults to ~/.wechat-ai-bridge", async () => {
     const { getDesktopRuntimeConfig } = await import(
       "../../apps/desktop/shared/runtime-config"
     );
     const config = getDesktopRuntimeConfig({}, { appVersion: "0.2.0" });
-    expect(config.paths.nexuHome).toBe("~/.nexu");
+    expect(config.paths.nexuHome).toBe("~/.wechat-ai-bridge");
   });
 
   it("NEXU_HOME env → uses env value", async () => {

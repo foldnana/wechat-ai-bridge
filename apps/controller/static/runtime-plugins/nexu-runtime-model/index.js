@@ -62,7 +62,7 @@ const plugin = {
       };
     });
 
-    api.on("before_prompt_build", async () => {
+    api.on("before_prompt_build", async (_event, ctx) => {
       const state = loadState();
       if (
         !state ||
@@ -71,8 +71,12 @@ const plugin = {
       ) {
         return;
       }
+      const preset = state.userPresets?.[ctx?.agentId];
       return {
-        prependSystemContext: state.promptNotice,
+        prependSystemContext: [
+          state.promptNotice,
+          typeof preset === "string" ? preset : "",
+        ].filter(Boolean).join("\n\n"),
       };
     });
   },

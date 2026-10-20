@@ -118,8 +118,8 @@ async function apiFetch(params: {
       body: params.body,
       signal: controller.signal,
     });
-    clearTimeout(t);
     const rawText = await res.text();
+    clearTimeout(t);
     logger.debug(
       `${params.label} status=${res.status} raw=${redactBody(rawText)}`,
     );
@@ -206,7 +206,7 @@ export async function getUploadUrl(
 export async function sendMessage(
   params: WeixinApiOptions & { body: SendMessageReq },
 ): Promise<void> {
-  await apiFetch({
+  const raw = await apiFetch({
     baseUrl: params.baseUrl,
     endpoint: "ilink/bot/sendmessage",
     body: JSON.stringify({ ...params.body, base_info: buildBaseInfo() }),
@@ -214,6 +214,13 @@ export async function sendMessage(
     timeoutMs: params.timeoutMs ?? DEFAULT_API_TIMEOUT_MS,
     label: "sendMessage",
   });
+  const result = JSON.parse(raw) as { ret?: number; errcode?: number };
+  if (
+    result.ret !== 0 ||
+    (result.errcode !== undefined && result.errcode !== 0)
+  ) {
+    throw new Error(`WeChat rejected message (code ${result.errcode ?? result.ret ?? "unknown"})`);
+  }
 }
 
 /** Fetch bot config (includes typing_ticket) for a given user. */

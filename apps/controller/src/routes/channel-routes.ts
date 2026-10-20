@@ -154,7 +154,10 @@ export function registerChannelRoutes(
     async (c) => {
       try {
         const { sessionKey } = c.req.valid("json");
-        const result = await container.channelService.wechatQrWait(sessionKey);
+        const result = await container.channelService.wechatQrWait(
+          sessionKey,
+          c.req.raw.signal,
+        );
         return c.json(result, 200);
       } catch (error) {
         return c.json(

@@ -88,7 +88,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Set display name early (matches productName in package.json).
-app.setName("nexu");
+app.setName("WeChat AI Bridge");
 nativeTheme.themeSource = "light";
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();

@@ -333,7 +333,12 @@ export class OpenClawSyncService {
         ? "zh-CN"
         : "en";
     if (runtimeModelRef) {
-      await this.runtimeModelWriter.write(runtimeModelRef);
+      await this.runtimeModelWriter.write(
+        runtimeModelRef,
+        Object.fromEntries(
+          config.bots.map((bot) => [bot.id, bot.systemPrompt ?? ""]),
+        ),
+      );
     } else {
       // TODO(alche): This writes `noModelMessage` into the runtime-model state
       // file, but the downstream OpenClaw/runtime consumer still primarily acts

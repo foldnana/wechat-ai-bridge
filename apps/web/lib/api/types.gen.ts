@@ -240,6 +240,158 @@ export type PostApiV1BotsByBotIdResumeResponses = {
 
 export type PostApiV1BotsByBotIdResumeResponse = PostApiV1BotsByBotIdResumeResponses[keyof PostApiV1BotsByBotIdResumeResponses];
 
+export type GetApiV1BridgeControlData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/control';
+};
+
+export type GetApiV1BridgeControlResponses = {
+    /**
+     * Reply pause state
+     */
+    200: {
+        paused: boolean;
+    };
+};
+
+export type GetApiV1BridgeControlResponse = GetApiV1BridgeControlResponses[keyof GetApiV1BridgeControlResponses];
+
+export type PutApiV1BridgeControlData = {
+    body: {
+        paused: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/control';
+};
+
+export type PutApiV1BridgeControlResponses = {
+    /**
+     * Pause or resume new replies
+     */
+    200: {
+        paused: boolean;
+    };
+};
+
+export type PutApiV1BridgeControlResponse = PutApiV1BridgeControlResponses[keyof PutApiV1BridgeControlResponses];
+
+export type PostApiV1BridgeSessionsByIdNewData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/bridge/sessions/{id}/new';
+};
+
+export type PostApiV1BridgeSessionsByIdNewResponses = {
+    /**
+     * Reset the active runtime conversation while preserving the preset
+     */
+    200: {
+        ok: boolean;
+        message: string;
+    };
+};
+
+export type PostApiV1BridgeSessionsByIdNewResponse = PostApiV1BridgeSessionsByIdNewResponses[keyof PostApiV1BridgeSessionsByIdNewResponses];
+
+export type GetApiV1BridgeActivityData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/activity';
+};
+
+export type GetApiV1BridgeActivityResponses = {
+    /**
+     * Local WeChat delivery stages without chat contents
+     */
+    200: {
+        activities: Array<{
+            channelId: string;
+            activity: {
+                runId: string;
+                receivedAt: string;
+                generatedAt: string;
+                sentAt: string;
+                lastSuccessfulReplyAt: string;
+                error: 'generation' | 'send';
+            };
+        }>;
+    };
+};
+
+export type GetApiV1BridgeActivityResponse = GetApiV1BridgeActivityResponses[keyof GetApiV1BridgeActivityResponses];
+
+export type PostApiV1BridgeModelData = {
+    body: {
+        provider?: 'deepseek' | 'custom-openai';
+        apiKey: string;
+        model?: string;
+        baseUrl?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/model';
+};
+
+export type PostApiV1BridgeModelResponses = {
+    /**
+     * Test generation, then save and select the model
+     */
+    200: {
+        ok: boolean;
+        saved?: boolean;
+        code: string;
+        message: string;
+        modelId?: string;
+    };
+};
+
+export type PostApiV1BridgeModelResponse = PostApiV1BridgeModelResponses[keyof PostApiV1BridgeModelResponses];
+
+export type GetApiV1BridgePresetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/preset';
+};
+
+export type GetApiV1BridgePresetResponses = {
+    /**
+     * User preset
+     */
+    200: {
+        preset: string;
+    };
+};
+
+export type GetApiV1BridgePresetResponse = GetApiV1BridgePresetResponses[keyof GetApiV1BridgePresetResponses];
+
+export type PutApiV1BridgePresetData = {
+    body: {
+        preset: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/preset';
+};
+
+export type PutApiV1BridgePresetResponses = {
+    /**
+     * Save user preset
+     */
+    200: {
+        ok: boolean;
+    };
+};
+
+export type PutApiV1BridgePresetResponse = PutApiV1BridgePresetResponses[keyof PutApiV1BridgePresetResponses];
+
 export type PostApiInternalDesktopShellOpenData = {
     body?: {
         path: string;

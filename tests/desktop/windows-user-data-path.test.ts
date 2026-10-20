@@ -2,16 +2,16 @@ import { describe, expect, it } from "vitest";
 import { resolveWindowsPackagedUserDataPath } from "../../apps/desktop/main/platforms/windows/user-data-path";
 
 describe("resolveWindowsPackagedUserDataPath", () => {
-  it("uses the standard Roaming nexu-desktop path by default", () => {
+  it("uses the independent Roaming wechat-ai-bridge path by default", () => {
     const result = resolveWindowsPackagedUserDataPath({
       appDataPath: "C:\\Users\\testuser\\AppData\\Roaming",
     });
 
     expect(result.defaultUserDataPath).toBe(
-      "C:\\Users\\testuser\\AppData\\Roaming\\nexu-desktop",
+      "C:\\Users\\testuser\\AppData\\Roaming\\wechat-ai-bridge",
     );
     expect(result.resolvedUserDataPath).toBe(
-      "C:\\Users\\testuser\\AppData\\Roaming\\nexu-desktop",
+      "C:\\Users\\testuser\\AppData\\Roaming\\wechat-ai-bridge",
     );
   });
 

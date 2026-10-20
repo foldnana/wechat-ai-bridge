@@ -73,8 +73,8 @@
     "toolsets": {
       "winCodeSign": "1.0.0"
     },
-    "appId": "io.nexu.desktop",
-    "productName": "Nexu",
+    "appId": "com.wechataibridge.desktop",
+    "productName": "WeChat AI Bridge",
     "icon": "build/icon.icns",
     "directories": {
       "output": "release"
@@ -135,7 +135,7 @@
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
       "target": ["dmg", "zip"],
-      "artifactName": "nexu-${version}-${arch}.${ext}",
+      "artifactName": "wechat-ai-bridge-${version}-${arch}.${ext}",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
@@ -156,7 +156,7 @@
           "arch": ["x64"]
         }
       ],
-      "artifactName": "nexu-${version}-${arch}.${ext}"
+      "artifactName": "wechat-ai-bridge-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -165,7 +165,7 @@
       "allowToChangeInstallationDirectory": false,
       "include": "build/installer.nsh",
       "deleteAppDataOnUninstall": false,
-      "artifactName": "nexu-setup-${version}-${arch}.${ext}"
+      "artifactName": "wechat-ai-bridge-setup-${version}-${arch}.${ext}"
     },
     "dmg": {
       "size": "2g"

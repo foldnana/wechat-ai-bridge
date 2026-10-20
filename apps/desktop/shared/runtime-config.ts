@@ -9,7 +9,7 @@ export const DEFAULT_CONTROLLER_PORT = 50_800;
 export const DEFAULT_WEB_PORT = 50_810;
 export const DEFAULT_OPENCLAW_BASE_URL = "http://127.0.0.1:18789";
 export const DEFAULT_GATEWAY_TOKEN = "gw-secret-token";
-export const DEFAULT_NEXU_HOME = "~/.nexu";
+export const DEFAULT_NEXU_HOME = "~/.wechat-ai-bridge";
 
 /**
  * Read build-time configuration from bundled config file.

@@ -34,7 +34,7 @@ afterEach(() => {
 });
 
 describe("desktop nexu home paths", () => {
-  it("resolves packaged nexu home to ~/.nexu instead of userData/.nexu", () => {
+  it("resolves bridge home independently from the upstream data directory", () => {
     const userDataPath = join(
       tempDir,
       "Library",
@@ -43,7 +43,7 @@ describe("desktop nexu home paths", () => {
       "desktop",
     );
     expect(getDesktopNexuHomeDir(userDataPath)).toBe(
-      join(process.env.HOME ?? "", ".nexu"),
+      join(process.env.HOME ?? "", ".wechat-ai-bridge"),
     );
     expect(getDesktopNexuHomeDir(userDataPath)).not.toBe(
       join(userDataPath, ".nexu"),

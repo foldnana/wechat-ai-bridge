@@ -179,7 +179,12 @@ function readWindowsRegistryUserDataRoot(): string | null {
   try {
     const output = execFileSync(
       "reg.exe",
-      ["query", "HKCU\\Software\\Nexu\\Desktop", "/v", "UserDataRoot"],
+      [
+        "query",
+        "HKCU\\Software\\WeChatAIBridge\\Desktop",
+        "/v",
+        "UserDataRoot",
+      ],
       {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],

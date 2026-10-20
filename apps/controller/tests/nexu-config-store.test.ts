@@ -9,6 +9,38 @@ describe("NexuConfigStore", () => {
   let rootDir = "";
   let env: ControllerEnv;
 
+  it("saves a tested provider and its model selection together, retaining other providers and presets", async () => {
+    const store = new NexuConfigStore(env);
+    await store.upsertProvider("openai", {
+      apiKey: "existing-test-key",
+      enabled: true,
+      modelsJson: '["test-model"]',
+    });
+    await store.upsertProvider("deepseek", {
+      apiKey: "old-test-key",
+      enabled: true,
+      modelsJson: '["deepseek-chat"]',
+    });
+    const bot = await store.getOrCreateDefaultBot();
+    await store.updateBot(bot.id, { systemPrompt: "用户自己的预设" });
+    const config = await store.getModelProviderConfigDocument();
+    const provider = { ...config.providers.deepseek, apiKey: "new-test-key" };
+    await store.saveProviderAndSelectModel(
+      "deepseek",
+      provider,
+      "deepseek/deepseek-chat",
+    );
+    // Reload from disk rather than relying on the in-memory copy.
+    const reloaded = await new NexuConfigStore(env).getConfig();
+    expect(reloaded.models.providers.openai.apiKey).toBe("existing-test-key");
+    expect(reloaded.models.providers.deepseek.apiKey).toBe("new-test-key");
+    expect(reloaded.runtime.defaultModelId).toBe("deepseek/deepseek-chat");
+    expect(reloaded.bots[0]).toMatchObject({
+      modelId: "deepseek/deepseek-chat",
+      systemPrompt: "用户自己的预设",
+    });
+  });
+
   beforeEach(async () => {
     rootDir = await mkdtemp(path.join(tmpdir(), "nexu-controller-"));
     env = {

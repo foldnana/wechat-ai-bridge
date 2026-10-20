@@ -32,15 +32,15 @@ RequestExecutionLevel user
 !include "WinMessages.nsh"
 !include "win-installer-lang.nsh"
 
-!define PRODUCT_PUBLISHER "Powerformer, Inc."
-!define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\Nexu.exe"
+!define PRODUCT_PUBLISHER "wechat-ai-bridge contributors"
+!define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\WeChat AI Bridge.exe"
 !define UNINSTALL_REGKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define INSTALLER_LOG "$TEMP\nexu-custom-installer.log"
-!define NEXU_CONFIG_REGKEY "Software\Nexu\Desktop"
+!define NEXU_CONFIG_REGKEY "Software\WeChatAIBridge\Desktop"
 !define NEXU_USER_DATA_VALUE "UserDataRoot"
-!define DEFAULT_USER_DATA_DIR_NAME "nexu-desktop"
-!define INSTALL_TOMBSTONE_PREFIX "nexu-desktop.old."
-!define USERDATA_TOMBSTONE_PREFIX "nexu-userdata.old."
+!define DEFAULT_USER_DATA_DIR_NAME "wechat-ai-bridge"
+!define INSTALL_TOMBSTONE_PREFIX "wechat-ai-bridge.old."
+!define USERDATA_TOMBSTONE_PREFIX "wechat-ai-bridge-userdata.old."
 !define INSTALL_TOMBSTONE_MARKER ".nexu-installer-tombstone"
 
 Var UserDataDir
@@ -59,7 +59,7 @@ Var UninstallResolvedUserDataDirHandle
 
 Name "${PRODUCT_NAME}"
 OutFile "${OUTPUT_EXE}"
-InstallDir "$LOCALAPPDATA\Programs\nexu-desktop"
+InstallDir "$LOCALAPPDATA\Programs\wechat-ai-bridge"
 InstallDirRegKey HKCU "${UNINSTALL_REGKEY}" "InstallLocation"
 Icon "${APP_ICON}"
 UninstallIcon "${APP_ICON}"
@@ -69,7 +69,7 @@ ShowUninstDetails show
 !define MUI_ABORTWARNING
 !define MUI_ICON "${APP_ICON}"
 !define MUI_UNICON "${APP_ICON}"
-!define MUI_FINISHPAGE_RUN "$INSTDIR\Nexu.exe"
+!define MUI_FINISHPAGE_RUN "$INSTDIR\WeChat AI Bridge.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "$(Lang_FinishRunNexu)"
 !define MUI_FINISHPAGE_SHOWREADME
 !define MUI_FINISHPAGE_SHOWREADME_TEXT "$(Lang_FinishCreateDesktopShortcut)"
@@ -201,7 +201,7 @@ FunctionEnd
 
 Function CleanupNexuConfigRegistryIfEmpty
   DeleteRegKey /ifempty HKCU "${NEXU_CONFIG_REGKEY}"
-  DeleteRegKey /ifempty HKCU "Software\Nexu"
+  DeleteRegKey /ifempty HKCU "Software\WeChatAIBridge"
 FunctionEnd
 
 Function UserDataPageCreate
@@ -504,7 +504,7 @@ FunctionEnd
 
 Function CreateDesktopShortcut
   Call CreateStartMenuShortcutVbs
-  nsExec::ExecToLog '"$SYSDIR\cscript.exe" //NoLogo "$PLUGINSDIR\create-shortcut.vbs" "$DESKTOP\Nexu.lnk" "$INSTDIR\Nexu.exe" "" "$INSTDIR" "$INSTDIR\Nexu.exe,0"'
+  nsExec::ExecToLog '"$SYSDIR\cscript.exe" //NoLogo "$PLUGINSDIR\create-shortcut.vbs" "$DESKTOP\WeChat AI Bridge.lnk" "$INSTDIR\WeChat AI Bridge.exe" "" "$INSTDIR" "$INSTDIR\WeChat AI Bridge.exe,0"'
   Pop $0
   ${If} $0 != "0"
     Push "failed to create desktop shortcut"
@@ -838,7 +838,7 @@ Function .onInit
   StrCpy $UserDataDir "$OldUserDataDir"
   StrCpy $MigrationStrategy "move"
 check_app_running:
-  nsExec::ExecToStack '"$SYSDIR\tasklist.exe" /FI "IMAGENAME eq Nexu.exe" /FO CSV /NH'
+  nsExec::ExecToStack '"$SYSDIR\tasklist.exe" /FI "IMAGENAME eq WeChat AI Bridge.exe" /FO CSV /NH'
   Pop $0
   Pop $1
   ${If} $0 != "0"
@@ -850,7 +850,7 @@ check_app_running:
     Abort
   ${EndIf}
   StrCpy $2 $1 10
-  ${If} $2 == '"Nexu.exe"'
+  ${If} $2 == '"WeChat AI Bridge.exe"'
     Push "installer init detected running Nexu instance"
     Call LogInstallerEvent
     MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(Lang_ErrorAppRunningRetry)" IDRETRY app_running_retry
@@ -909,11 +909,11 @@ Section "Install"
   Push "payload extraction done"
   Call LogInstallerEvent
 
-  WriteUninstaller "$INSTDIR\Uninstall Nexu.exe"
-  CreateDirectory "$SMPROGRAMS\Nexu"
+  WriteUninstaller "$INSTDIR\Uninstall WeChat AI Bridge.exe"
+  CreateDirectory "$SMPROGRAMS\WeChat AI Bridge"
   DetailPrint "$(Lang_StatusFinalizeInstall)"
   Call CreateStartMenuShortcutVbs
-  nsExec::ExecToLog '"$SYSDIR\cscript.exe" //NoLogo "$PLUGINSDIR\create-shortcut.vbs" "$SMPROGRAMS\Nexu\Nexu.lnk" "$INSTDIR\Nexu.exe" "" "$INSTDIR" "$INSTDIR\Nexu.exe,0"'
+  nsExec::ExecToLog '"$SYSDIR\cscript.exe" //NoLogo "$PLUGINSDIR\create-shortcut.vbs" "$SMPROGRAMS\WeChat AI Bridge\WeChat AI Bridge.lnk" "$INSTDIR\WeChat AI Bridge.exe" "" "$INSTDIR" "$INSTDIR\WeChat AI Bridge.exe,0"'
   Pop $0
   ${If} $0 != "0"
     Push "failed to create app Start Menu shortcut"
@@ -921,7 +921,7 @@ Section "Install"
     MessageBox MB_OK|MB_ICONSTOP "$(Lang_ErrorCreateShortcutFailed)"
     Abort
   ${EndIf}
-  nsExec::ExecToLog '"$SYSDIR\cscript.exe" //NoLogo "$PLUGINSDIR\create-shortcut.vbs" "$SMPROGRAMS\Nexu\Uninstall Nexu.lnk" "$INSTDIR\Uninstall Nexu.exe" "" "$INSTDIR" "$INSTDIR\Uninstall Nexu.exe,0"'
+  nsExec::ExecToLog '"$SYSDIR\cscript.exe" //NoLogo "$PLUGINSDIR\create-shortcut.vbs" "$SMPROGRAMS\WeChat AI Bridge\Uninstall WeChat AI Bridge.lnk" "$INSTDIR\Uninstall WeChat AI Bridge.exe" "" "$INSTDIR" "$INSTDIR\Uninstall WeChat AI Bridge.exe,0"'
   Pop $0
   ${If} $0 != "0"
     Push "failed to create uninstall Start Menu shortcut"
@@ -934,9 +934,9 @@ Section "Install"
   WriteRegStr HKCU "${UNINSTALL_REGKEY}" "DisplayVersion" "${APP_VERSION}"
   WriteRegStr HKCU "${UNINSTALL_REGKEY}" "Publisher" "${PRODUCT_PUBLISHER}"
   WriteRegStr HKCU "${UNINSTALL_REGKEY}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "${UNINSTALL_REGKEY}" "UninstallString" '"$INSTDIR\Uninstall Nexu.exe"'
-  WriteRegStr HKCU "${UNINSTALL_REGKEY}" "DisplayIcon" "$INSTDIR\Nexu.exe"
-  WriteRegStr HKCU "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\Nexu.exe"
+  WriteRegStr HKCU "${UNINSTALL_REGKEY}" "UninstallString" '"$INSTDIR\Uninstall WeChat AI Bridge.exe"'
+  WriteRegStr HKCU "${UNINSTALL_REGKEY}" "DisplayIcon" "$INSTDIR\WeChat AI Bridge.exe"
+  WriteRegStr HKCU "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\WeChat AI Bridge.exe"
   StrCpy $0 "$UserDataDir"
   StrCpy $1 "$APPDATA\${DEFAULT_USER_DATA_DIR_NAME}"
   Call PathsEqualIgnoreCase
@@ -985,13 +985,13 @@ Section "Uninstall"
   DeleteRegValue HKCU "${NEXU_CONFIG_REGKEY}" "PendingUserDataMigrationTarget"
   DeleteRegValue HKCU "${NEXU_CONFIG_REGKEY}" "PendingUserDataMigrationStrategy"
   Call un.CleanupNexuConfigRegistryIfEmpty
-  Delete "$DESKTOP\Nexu.lnk"
-  Delete "$SMPROGRAMS\Nexu\Nexu.lnk"
-  Delete "$SMPROGRAMS\Nexu\Uninstall Nexu.lnk"
-  RMDir "$SMPROGRAMS\Nexu"
+  Delete "$DESKTOP\WeChat AI Bridge.lnk"
+  Delete "$SMPROGRAMS\WeChat AI Bridge\WeChat AI Bridge.lnk"
+  Delete "$SMPROGRAMS\WeChat AI Bridge\Uninstall WeChat AI Bridge.lnk"
+  RMDir "$SMPROGRAMS\WeChat AI Bridge"
   DeleteRegKey HKCU "${UNINSTALL_REGKEY}"
   DeleteRegKey HKCU "${PRODUCT_DIR_REGKEY}"
-  Delete "$INSTDIR\Uninstall Nexu.exe"
+  Delete "$INSTDIR\Uninstall WeChat AI Bridge.exe"
   Call un.BuildInstallTombstonePath
   StrCpy $0 "$0"
   Rename "$INSTDIR" "$0"
@@ -1044,7 +1044,7 @@ SectionEnd
 
 Function un.CleanupNexuConfigRegistryIfEmpty
   DeleteRegKey /ifempty HKCU "${NEXU_CONFIG_REGKEY}"
-  DeleteRegKey /ifempty HKCU "Software\Nexu"
+  DeleteRegKey /ifempty HKCU "Software\WeChatAIBridge"
 FunctionEnd
 
 Function un.WriteTombstoneMarker

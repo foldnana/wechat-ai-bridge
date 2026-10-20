@@ -34,6 +34,9 @@ export function createWindowsBuildCapabilities({
         `--config.electronVersion=${electronVersion}`,
         `--config.buildVersion=${buildVersion}`,
         `--config.directories.output=${releaseRoot}`,
+        ...(env.NEXU_DESKTOP_ELECTRON_DIST
+          ? [`--config.electronDist=${env.NEXU_DESKTOP_ELECTRON_DIST}`]
+          : []),
       ];
     },
     createElectronBuilderEnv() {

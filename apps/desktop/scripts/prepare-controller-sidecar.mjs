@@ -1,5 +1,5 @@
 import { cp, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import {
   copyRuntimeDependencyClosure,
   getSidecarRoot,
@@ -33,14 +33,14 @@ const diagnosticsEnabled =
   process.env.NEXU_DESKTOP_DIST_DIAGNOSTICS?.toLowerCase() === "true";
 const requiredBundledPluginArtifacts = [
   {
-    pluginId: "openclaw-qqbot",
-    requiredPath: join("node_modules", "silk-wasm", "package.json"),
-    label: "silk-wasm",
+    pluginId: "openclaw-weixin",
+    requiredPath: "index.ts",
+    label: "WeChat entry",
   },
   {
-    pluginId: "dingtalk-connector",
-    requiredPath: join("node_modules", "dingtalk-stream", "package.json"),
-    label: "dingtalk-stream",
+    pluginId: "nexu-runtime-model",
+    requiredPath: "index.js",
+    label: "model routing entry",
   },
 ];
 
@@ -117,16 +117,16 @@ async function prepareControllerSidecar() {
 
   if (await pathExists(controllerBundledPluginsRoot)) {
     await ensureBundledPluginDependencyTree(
-      controllerBundledPluginsRoot,
-      "controller bundled plugins",
+      resolve(controllerStaticRoot, "runtime-plugins"),
+      "controller runtime plugins",
     );
     await cp(controllerBundledPluginsRoot, sidecarPluginsRoot, {
       recursive: true,
       dereference: true,
     });
     await ensureBundledPluginDependencyTree(
-      sidecarPluginsRoot,
-      "controller sidecar plugins",
+      resolve(sidecarStaticRoot, "runtime-plugins"),
+      "controller sidecar runtime plugins",
     );
   }
 

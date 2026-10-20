@@ -10,7 +10,7 @@ import {
 import { dirname, resolve } from "node:path";
 import type { PendingUserDataMigrationContext } from "../platforms/types";
 
-const WINDOWS_CONFIG_REGKEY = "HKCU\\Software\\Nexu\\Desktop";
+const WINDOWS_CONFIG_REGKEY = "HKCU\\Software\\WeChatAIBridge\\Desktop";
 const USER_DATA_ROOT_VALUE = "UserDataRoot";
 const PENDING_SOURCE_VALUE = "PendingUserDataMigrationSource";
 const PENDING_TARGET_VALUE = "PendingUserDataMigrationTarget";

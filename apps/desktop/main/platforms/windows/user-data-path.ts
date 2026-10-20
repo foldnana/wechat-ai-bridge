@@ -14,7 +14,10 @@ export interface ResolveWindowsPackagedUserDataPathResult {
 export function resolveWindowsPackagedUserDataPath(
   input: ResolveWindowsPackagedUserDataPathInput,
 ): ResolveWindowsPackagedUserDataPathResult {
-  const defaultUserDataPath = win32.resolve(input.appDataPath, "nexu-desktop");
+  const defaultUserDataPath = win32.resolve(
+    input.appDataPath,
+    "wechat-ai-bridge",
+  );
   const resolvedUserDataPath = input.overrideUserDataPath
     ? win32.resolve(input.overrideUserDataPath)
     : input.registryUserDataPath

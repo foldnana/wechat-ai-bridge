@@ -16,6 +16,8 @@ import { readFrameworkAllowFromList } from "../auth/pairing.js";
 import { downloadRemoteImageToTemp } from "../cdn/upload.js";
 import { downloadMediaFromItem } from "../media/media-download.js";
 import { logger } from "../util/logger.js";
+import { beginBridgeActivity } from "../storage/bridge-activity.js";
+import { bridgeRepliesPaused } from "../storage/bridge-control.js";
 import { redactBody, redactToken } from "../util/redact.js";
 
 import { isDebugMode } from "./debug-mode.js";
@@ -70,6 +72,8 @@ export async function processOneMessage(
   full: WeixinMessage,
   deps: ProcessMessageDeps,
 ): Promise<void> {
+  // Messages received while paused are intentionally ignored, not queued.
+  if (bridgeRepliesPaused()) return;
   if (!deps?.channelRuntime) {
     logger.error(
       `processOneMessage: channelRuntime is undefined, skipping message from=${full.from_user_id}`,
@@ -216,6 +220,7 @@ export async function processOneMessage(
   }
 
   ctx.CommandAuthorized = commandAuthorized;
+  const bridgeActivity = beginBridgeActivity(deps.accountId);
   logger.debug(
     `authorization: senderId=${senderId} commandAuthorized=${String(commandAuthorized)} senderAllowed=${String(senderAllowedForCommands)}`,
   );
@@ -344,6 +349,9 @@ export async function processOneMessage(
       deliver: async (payload) => {
         const text = markdownToPlainText(payload.text ?? "");
         const mediaUrl = payload.mediaUrl ?? payload.mediaUrls?.[0];
+        const isAnswer = !payload.isError && Boolean(text.trim() || mediaUrl);
+        if (isAnswer) bridgeActivity.generated();
+        else if (payload.isError) bridgeActivity.failed("generation");
         logger.debug(
           `outbound payload: ${redactBody(JSON.stringify(payload))}`,
         );
@@ -406,6 +414,7 @@ export async function processOneMessage(
                 },
               });
               logger.info(`outbound: text sent to=${ctx.To}`);
+              if (isAnswer) bridgeActivity.sent();
               return;
             }
             await sendWeixinMediaFile({
@@ -429,7 +438,9 @@ export async function processOneMessage(
             });
             logger.info(`outbound: text sent OK to=${ctx.To}`);
           }
+          if (isAnswer) bridgeActivity.sent();
         } catch (err) {
+          bridgeActivity.failed("send");
           logger.error(
             `outbound: FAILED to=${ctx.To} mediaUrl=${mediaUrl ?? "none"} err=${String(err)} stack=${(err as Error).stack ?? ""}`,
           );
@@ -437,6 +448,7 @@ export async function processOneMessage(
         }
       },
       onError: (err, info) => {
+        bridgeActivity.failed("generation");
         deps.errLog(`weixin reply ${info.kind}: ${String(err)}`);
         const errMsg = err instanceof Error ? err.message : String(err);
         let notice: string;
@@ -489,6 +501,7 @@ export async function processOneMessage(
       `dispatchReplyFromConfig: done agentId=${route.agentId ?? "(none)"}`,
     );
   } catch (err) {
+    bridgeActivity.failed("generation");
     logger.error(
       `dispatchReplyFromConfig: error agentId=${route.agentId ?? "(none)"} err=${String(err)}`,
     );

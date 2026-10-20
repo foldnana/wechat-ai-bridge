@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import { registerBotRoutes } from "../routes/bot-routes.js";
+import { registerBridgeRoutes } from "../routes/bridge-routes.js";
 import { registerChannelRoutes } from "../routes/channel-routes.js";
 import { registerDesktopCompatRoutes } from "../routes/desktop-compat-routes.js";
 import { registerDesktopRoutes } from "../routes/desktop-routes.js";
@@ -30,6 +31,7 @@ export function createApp(container: ControllerContainer) {
   );
 
   registerBotRoutes(app, container);
+  registerBridgeRoutes(app, container);
   registerDesktopRoutes(app, container);
   registerDesktopCompatRoutes(app, container);
   registerChannelRoutes(app, container);

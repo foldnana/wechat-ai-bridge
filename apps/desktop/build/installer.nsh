@@ -1,8 +1,8 @@
 !include "LogicLib.nsh"
 !include "WordFunc.nsh"
 
-!define NEXU_DATA_DIR_NAME "nexu-desktop"
-!define NEXU_TOMBSTONE_PREFIX "nexu-desktop.tombstone-"
+!define NEXU_DATA_DIR_NAME "wechat-ai-bridge"
+!define NEXU_TOMBSTONE_PREFIX "wechat-ai-bridge.tombstone-"
 !define NEXU_RUNONCE_KEY "Software\Microsoft\Windows\CurrentVersion\RunOnce"
 !define NEXU_RUNONCE_VALUE_PREFIX "NexuDesktopCleanup-"
 !define NEXU_WSHELL "$SYSDIR\wscript.exe"
@@ -23,7 +23,7 @@
   ReadRegStr $0 HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation
   ReadRegStr $1 HKCU "${INSTALL_REGISTRY_KEY}" DisplayVersion
   ${if} $0 == ""
-    StrCpy $INSTDIR "$LOCALAPPDATA\Programs\nexu-desktop"
+    StrCpy $INSTDIR "$LOCALAPPDATA\Programs\wechat-ai-bridge"
   ${else}
     StrCpy $INSTDIR "$0"
   ${endif}
@@ -44,7 +44,7 @@
 !macroend
 
 !macro customUnInstallSection
-  Section /o "un.Delete local data (%APPDATA%\\nexu-desktop)"
+  Section /o "un.Delete local data (%APPDATA%\\wechat-ai-bridge)"
     SetShellVarContext current
     Call un.TryQueueNexuDataDeletion
   SectionEnd
@@ -127,13 +127,13 @@
     Call LogNexuInstallerEvent
 
   retry:
-    nsExec::ExecToStack '"$SYSDIR\tasklist.exe" /FI "IMAGENAME eq Nexu.exe" /NH'
+    nsExec::ExecToStack '"$SYSDIR\tasklist.exe" /FI "IMAGENAME eq WeChat AI Bridge.exe" /NH'
     Pop $0
     Pop $1
     StrCpy $2 $1 8
 
     ${If} $0 == "0"
-    ${AndIf} $2 == "Nexu.exe"
+    ${AndIf} $2 == "WeChat AI Bridge.exe"
       Push "Nexu process detected during install init"
       Call LogNexuInstallerEvent
       MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Nexu is currently running.$\r$\n$\r$\nPlease quit the app before continuing the installation." /SD IDCANCEL IDRETRY retry

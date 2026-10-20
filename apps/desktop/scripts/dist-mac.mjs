@@ -476,14 +476,14 @@ async function stapleNotarizedAppBundles() {
 
 const requiredBundledPluginArtifacts = [
   {
-    pluginId: "openclaw-qqbot",
-    requiredPath: ["node_modules", "silk-wasm", "package.json"],
-    label: "silk-wasm",
+    pluginId: "openclaw-weixin",
+    requiredPath: ["index.ts"],
+    label: "WeChat entry",
   },
   {
-    pluginId: "dingtalk-connector",
-    requiredPath: ["node_modules", "dingtalk-stream", "package.json"],
-    label: "dingtalk-stream",
+    pluginId: "nexu-runtime-model",
+    requiredPath: ["index.js"],
+    label: "model routing entry",
   },
 ];
 

@@ -113,4 +113,36 @@ describe("nexu-runtime-model plugin", () => {
     await expect(beforeModelResolveHandler?.()).resolves.toBeUndefined();
     await expect(beforePromptBuildHandler?.()).resolves.toBeUndefined();
   });
+
+  it("loads the current agent preset on every turn and supports clearing it", async () => {
+    const { default: plugin } = await import(
+      `${pluginModulePath}?preset=${Date.now()}`
+    );
+    let handler:
+      | ((
+          event: unknown,
+          ctx: { agentId: string },
+        ) => Promise<{ prependSystemContext: string } | undefined>)
+      | undefined;
+    plugin.register({
+      on(event, callback) {
+        if (event === "before_prompt_build") handler = callback;
+      },
+    });
+    for (const preset of ["只用简洁中文回答", "先给结论", ""]) {
+      await writeFile(
+        stateModulePath,
+        JSON.stringify({
+          selectedModelRef: "deepseek/deepseek-chat",
+          promptNotice: "Current model: DeepSeek",
+          userPresets: { bot: preset, other: "another user's private preset" },
+        }),
+      );
+      const result = await handler?.({}, { agentId: "bot" });
+      expect(result?.prependSystemContext).toBe(
+        ["Current model: DeepSeek", preset].filter(Boolean).join("\n\n"),
+      );
+      expect(result?.prependSystemContext).not.toContain("another user's");
+    }
+  });
 });

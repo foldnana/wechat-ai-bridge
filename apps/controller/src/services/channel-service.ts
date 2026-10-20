@@ -8,16 +8,13 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import type { ChannelResponse } from "@nexu/shared";
 import type { ControllerEnv } from "../app/env.js";
 import { logger } from "../lib/logger.js";
 import { proxyFetch } from "../lib/proxy-fetch.js";
 import type { NexuConfigStore } from "../store/nexu-config-store.js";
 import type { OpenClawSyncService } from "./openclaw-sync-service.js";
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 const DEFAULT_WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
 const DEFAULT_WECHAT_BOT_TYPE = "3";
@@ -185,6 +182,7 @@ async function fetchWechatQrCode(
 async function pollWechatQrStatus(
   apiBaseUrl: string,
   qrcode: string,
+  signal?: AbortSignal,
 ): Promise<WechatQrStatusResponse> {
   const base = apiBaseUrl.endsWith("/") ? apiBaseUrl : `${apiBaseUrl}/`;
   const url = new URL(
@@ -196,7 +194,9 @@ async function pollWechatQrStatus(
   try {
     const response = await proxyFetch(url.toString(), {
       headers: { "iLink-App-ClientVersion": "1" },
-      signal: controller.signal,
+      signal: signal
+        ? AbortSignal.any([signal, controller.signal])
+        : controller.signal,
     });
     const rawText = await response.text();
     if (!response.ok) {
@@ -206,6 +206,7 @@ async function pollWechatQrStatus(
     }
     return JSON.parse(rawText) as WechatQrStatusResponse;
   } catch (error) {
+    signal?.throwIfAborted();
     if (error instanceof Error && error.name === "AbortError") {
       return { status: "wait" };
     }
@@ -299,7 +300,7 @@ export class ChannelService {
     };
   }
 
-  async wechatQrWait(sessionKey: string) {
+  async wechatQrWait(sessionKey: string, signal?: AbortSignal) {
     const activeLogin = activeWechatLogins.get(sessionKey);
     if (!activeLogin) {
       return {
@@ -316,15 +317,19 @@ export class ChannelService {
       };
     }
 
-    const deadline = Date.now() + 500_000;
+    const deadline = activeLogin.startedAt + WECHAT_LOGIN_TTL_MS;
     while (Date.now() < deadline) {
+      signal?.throwIfAborted();
       const status = await pollWechatQrStatus(
         DEFAULT_WECHAT_BASE_URL,
         activeLogin.qrcode,
+        signal,
       );
+      signal?.throwIfAborted();
+      if (Date.now() >= deadline) break;
 
       if (status.status === "wait" || status.status === "scaned") {
-        await sleep(WECHAT_QR_POLL_BACKOFF_MS);
+        await sleep(WECHAT_QR_POLL_BACKOFF_MS, undefined, { signal });
         continue;
       }
 

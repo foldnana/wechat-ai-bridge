@@ -1029,7 +1029,23 @@ export async function prepareSlimclawRuntimeStageInternal(
     `[slimclaw-runtime-stage] switching staged runtime into place at ${options.targetStageRoot}`,
   );
   await rm(options.targetStageRoot, { recursive: true, force: true });
-  await rename(stageRoot, options.targetStageRoot);
+  // Windows scanners may briefly hold a newly copied runtime directory.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(stageRoot, options.targetStageRoot);
+      break;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (
+        process.platform !== "win32" ||
+        !["EPERM", "EACCES", "EBUSY"].includes(code ?? "") ||
+        attempt >= 9
+      ) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
 
   emitLog(
     options.log,

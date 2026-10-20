@@ -81,7 +81,7 @@ const envSchema = z.object({
     .default("development"),
   PORT: z.coerce.number().int().positive().default(3010),
   HOST: z.string().default("127.0.0.1"),
-  NEXU_HOME: z.string().default("~/.nexu"),
+  NEXU_HOME: z.string().default("~/.wechat-ai-bridge"),
   NEXU_CONTROLLER_OPENCLAW_MODE: openclawOwnershipModeSchema.optional(),
   OPENCLAW_BASE_URL: z.string().url().optional(),
   OPENCLAW_STATE_DIR: z.string().optional(),

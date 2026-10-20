@@ -359,7 +359,7 @@ export class NexuConfigStore {
 
     const config = await this.getConfig();
     const bot = await this.createBot({
-      name: "nexu Assistant",
+      name: "微信 AI",
       slug: "nexu-assistant",
       modelId: config.runtime.defaultModelId,
     });
@@ -907,6 +907,26 @@ export class NexuConfigStore {
   async getModelProviderConfigDocument(): Promise<PersistedModelsConfig> {
     const config = await this.getConfig();
     return config.models;
+  }
+
+  async saveProviderAndSelectModel(
+    providerKey: string,
+    provider: ModelProviderConfig,
+    modelId: string,
+  ): Promise<void> {
+    await this.store.update((config) => ({
+      ...config,
+      schemaVersion: Math.max(
+        config.schemaVersion,
+        CANONICAL_MODELS_PROVIDERS_CUTOVER_SCHEMA_VERSION,
+      ),
+      models: {
+        ...config.models,
+        providers: { ...config.models.providers, [providerKey]: provider },
+      },
+      runtime: { ...config.runtime, defaultModelId: modelId },
+      bots: config.bots.map((bot) => ({ ...bot, modelId, updatedAt: now() })),
+    }));
   }
 
   async setModelProviderConfigDocument(

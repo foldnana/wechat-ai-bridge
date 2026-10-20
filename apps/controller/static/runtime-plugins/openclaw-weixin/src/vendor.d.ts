@@ -9,6 +9,14 @@ declare module "qrcode-terminal" {
   export default qrcodeTerminal;
 }
 
+// Optional decoder: silkToWav catches unavailable imports and keeps raw audio.
+declare module "silk-wasm" {
+  export function decode(
+    input: Uint8Array,
+    sampleRate: number,
+  ): Promise<{ data: Uint8Array; duration: number }>;
+}
+
 declare module "fluent-ffmpeg" {
   interface FfmpegCommand {
     setFfmpegPath(path: string): FfmpegCommand;

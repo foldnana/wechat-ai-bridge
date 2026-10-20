@@ -148,7 +148,10 @@ async function main() {
   const installerRoot = resolve(releaseRoot, "win-installer");
   const payloadRoot = resolve(installerRoot, "payload");
   const payloadPath = resolve(payloadRoot, "payload.7z");
-  const installerPath = resolve(releaseRoot, `nexu-setup-${version}-x64.exe`);
+  const installerPath = resolve(
+    releaseRoot,
+    `wechat-ai-bridge-setup-${version}-x64.exe`,
+  );
   const installerScriptPath = resolve(
     electronRoot,
     "build",
@@ -258,7 +261,7 @@ async function main() {
           [
             "/V4",
             `/DAPP_VERSION=${version}`,
-            "/DPRODUCT_NAME=Nexu",
+            "/DPRODUCT_NAME=WeChat AI Bridge",
             `/DOUTPUT_EXE=${installerPath}`,
             `/DPAYLOAD_7Z=${payloadPath}`,
             `/DSEVEN_Z_EXE=${vendored7zExePath}`,

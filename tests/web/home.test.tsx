@@ -9,6 +9,7 @@ vi.mock("react-i18next", () => ({
 }));
 function renderHome(modelId: string | null) {
   const client = new QueryClient();
+  client.setQueryData(["bridge-control"], { paused: false });
   client.setQueryData(["desktop-default-model"], { modelId });
   client.setQueryData(["channels"], { channels: [] });
   client.setQueryData(["models"], {
