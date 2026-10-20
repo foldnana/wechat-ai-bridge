@@ -18,6 +18,7 @@ import {
 } from "@nexu/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   Check,
   ExternalLink,
   FolderOpen,
@@ -29,7 +30,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   deleteApiV1ModelProvidersMinimaxOauthLogin,
@@ -53,8 +54,8 @@ import type {
   PostApiV1ModelProvidersByProviderIdValidateData,
   PutApiV1ModelProvidersConfigData,
 } from "../../lib/api/types.gen";
+import { BridgeMark } from "../components/bridge/bridge-mark";
 import { Button } from "../components/ui/button";
-import { PageHeader } from "../components/ui/page-header";
 import {
   Select,
   SelectContent,
@@ -708,12 +709,6 @@ function AddCustomProviderDetail({
 
 export function ModelsPage() {
   const { t } = useTranslation();
-  const isDesktopClient = useMemo(
-    () =>
-      typeof navigator !== "undefined" &&
-      navigator.userAgent.includes("Electron"),
-    [],
-  );
   const [searchParams, setSearchParams] = useSearchParams();
   const isSetupMode = searchParams.get("setup") === "1";
   const tabParam = searchParams.get("tab");
@@ -1104,55 +1099,54 @@ export function ModelsPage() {
   }, [desktopReadyData?.workspacePath]);
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div
-        className="max-w-4xl mx-auto px-4 sm:px-6 pb-6 sm:pb-8"
-        style={{ paddingTop: isDesktopClient ? "2rem" : "0.5rem" }}
-      >
+    <div className="bridge-advanced-page">
+      <div className="bridge-page">
         <div className="mb-6">
-          <PageHeader
-            title={t("models.pageTitle")}
-            description={t("models.pageSubtitle")}
-            actions={
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  void handleOpenWorkspace();
-                }}
-              >
-                <FolderOpen size={13} />
-                {t("settings.providers.workspace")}
-              </Button>
-            }
-          />
-
-          <div className="mt-4 flex items-center gap-0 border-b border-border">
-            {[
-              { id: "general" as SettingsTab, label: t("settings.tabGeneral") },
-              {
-                id: "providers" as SettingsTab,
-                label: t("settings.tabProviders"),
-              },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => changeSettingsTab(tab.id)}
-                className={cn(
-                  "relative px-4 py-2.5 text-[13px] font-medium transition-colors",
-                  settingsTab === tab.id
-                    ? "text-text-primary"
-                    : "text-text-muted hover:text-text-secondary",
-                )}
-              >
-                {tab.label}
-                {settingsTab === tab.id ? (
-                  <span className="absolute bottom-0 left-4 right-4 h-[2px] rounded-full bg-accent" />
-                ) : null}
-              </button>
-            ))}
+          <div className="bridge-page-heading">
+            <div>
+              <span className="bridge-eyebrow">MORE CONNECTIONS</span>
+              <h1>更多模型，同样简单。</h1>
+              <p>管理已有供应商，或添加你熟悉的模型服务。</p>
+            </div>
+            <Link className="bridge-back-link" to="/workspace/models">
+              <ArrowLeft size={16} />
+              返回快速配置
+            </Link>
+          </div>
+          <div className="bridge-provider-toolbar">
+            <div className="bridge-settings-tabs">
+              {[
+                {
+                  id: "general" as SettingsTab,
+                  label: t("settings.tabGeneral"),
+                },
+                {
+                  id: "providers" as SettingsTab,
+                  label: t("settings.tabProviders"),
+                },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => changeSettingsTab(tab.id)}
+                  aria-pressed={settingsTab === tab.id}
+                  className={settingsTab === tab.id ? "is-active" : ""}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void handleOpenWorkspace();
+              }}
+            >
+              <FolderOpen size={13} />
+              {t("settings.providers.workspace")}
+            </Button>
           </div>
         </div>
 
@@ -1161,14 +1155,10 @@ export function ModelsPage() {
         ) : (
           <div className="space-y-6">
             <div className="rounded-xl border border-border bg-surface-1 px-4 py-3.5">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-accent/10 to-accent/5">
-                    <img
-                      src="/brand/logo-black-1.svg"
-                      alt="nexu"
-                      className="h-5 w-5 object-contain"
-                    />
+                    <BridgeMark className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
                     <div className="text-[13px] font-semibold text-text-primary">
@@ -1205,11 +1195,11 @@ export function ModelsPage() {
             </div>
 
             <div
-              className="flex gap-0 overflow-hidden rounded-xl border border-border bg-surface-1"
+              className="bridge-provider-browser flex gap-0 overflow-hidden rounded-xl border border-border bg-surface-1"
               style={{ minHeight: 500 }}
             >
               {/* Left: Provider list */}
-              <div className="w-56 shrink-0 bg-surface-0 flex flex-col border-r border-border-subtle">
+              <div className="bridge-provider-list w-56 shrink-0 bg-surface-0 flex flex-col border-r border-border-subtle">
                 <div className="flex-1 overflow-y-auto p-2">
                   <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
                     {t("settings.tabProviders")}
@@ -1272,7 +1262,7 @@ export function ModelsPage() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-5">
+              <div className="min-w-0 flex-1 overflow-y-auto p-5">
                 {activeProvider ? (
                   providerConfigDoc === undefined ? (
                     <div className="flex items-center justify-center h-full">

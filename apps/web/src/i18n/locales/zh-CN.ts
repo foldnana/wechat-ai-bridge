@@ -476,7 +476,7 @@ const zhCN = {
   "settings.about.github": "GitHub 仓库",
   "settings.about.changelog": "更新日志",
   "settings.about.feedback": "发送反馈",
-  "settings.providers.botModelTitle": "nexu Bot 模型",
+  "settings.providers.botModelTitle": "Bridge 默认模型",
   "settings.providers.botModelDesc": "选择桌面工作区默认使用的模型。",
   "settings.providers.workspace": "工作区",
   "models.loading": "正在加载模型...",

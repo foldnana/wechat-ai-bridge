@@ -4,6 +4,7 @@ import {
   postApiV1ChannelsWechatQrStart,
   postApiV1ChannelsWechatQrWait,
 } from "../../apps/web/lib/api/sdk.gen";
+import { parseWechatQr } from "../../apps/web/src/components/channel-setup/wechat-qr";
 import { runWechatSetup } from "../../apps/web/src/components/channel-setup/wechat-setup-flow";
 vi.mock("../../apps/web/lib/api/sdk.gen", () => ({
   postApiV1ChannelsWechatQrStart: vi.fn(),
@@ -32,7 +33,10 @@ describe("bounded and cancellable WeChat authorization", () => {
   });
   it("does not save an expired authorization", async () => {
     vi.mocked(postApiV1ChannelsWechatQrStart).mockResolvedValue({
-      data: { sessionKey: "test-session", qrDataUrl: "test-qr" },
+      data: {
+        sessionKey: "test-session",
+        qrDataUrl: "https://weixin.qq.com/x/test-qr",
+      },
     } as never);
     vi.mocked(postApiV1ChannelsWechatQrWait).mockResolvedValue({
       data: { connected: false },
@@ -45,7 +49,10 @@ describe("bounded and cancellable WeChat authorization", () => {
   it("stops a cancelled wait before saving, even when a stale result arrives", async () => {
     const controller = new AbortController();
     vi.mocked(postApiV1ChannelsWechatQrStart).mockResolvedValue({
-      data: { sessionKey: "test-session", qrDataUrl: "test-qr" },
+      data: {
+        sessionKey: "test-session",
+        qrDataUrl: "https://weixin.qq.com/x/test-qr",
+      },
     } as never);
     vi.mocked(postApiV1ChannelsWechatQrWait).mockImplementation(async () => {
       controller.abort();
@@ -58,7 +65,10 @@ describe("bounded and cancellable WeChat authorization", () => {
   });
   it("uses real loading, scanning and saving states without claiming a model reply", async () => {
     vi.mocked(postApiV1ChannelsWechatQrStart).mockResolvedValue({
-      data: { sessionKey: "test-session", qrDataUrl: "test-qr" },
+      data: {
+        sessionKey: "test-session",
+        qrDataUrl: "https://weixin.qq.com/x/test-qr",
+      },
     } as never);
     vi.mocked(postApiV1ChannelsWechatQrWait).mockResolvedValue({
       data: { connected: true, accountId: "test-account" },
@@ -75,5 +85,33 @@ describe("bounded and cancellable WeChat authorization", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+  it("refuses a placeholder QR before showing it or polling authorization", async () => {
+    vi.mocked(postApiV1ChannelsWechatQrStart).mockResolvedValue({
+      data: {
+        sessionKey: "preview-only",
+        qrDataUrl: "https://example.invalid/bridge-ui-preview-not-a-real-qr",
+      },
+    } as never);
+    const displayQr = vi.fn();
+    await expect(
+      runWechatSetup(new AbortController().signal, vi.fn(), displayQr),
+    ).rejects.toThrow("不是有效授权二维码");
+    expect(displayQr).not.toHaveBeenCalled();
+    expect(postApiV1ChannelsWechatQrWait).not.toHaveBeenCalled();
+    expect(postApiV1ChannelsWechatConnect).not.toHaveBeenCalled();
+  });
+  it("distinguishes image data and remote images from authorization links", () => {
+    expect(parseWechatQr(" data:image/png;base64,aGVsbG8= ")).toEqual({
+      kind: "image",
+      value: "data:image/png;base64,aGVsbG8=",
+    });
+    expect(parseWechatQr("https://weixin.qq.com/qr.png")?.kind).toBe("image");
+    expect(parseWechatQr(" https://weixin.qq.com/x/test-qr ")?.value).toBe(
+      "https://weixin.qq.com/x/test-qr",
+    );
+    expect(parseWechatQr("test-qr")).toBeNull();
+    expect(parseWechatQr("")).toBeNull();
+    expect(parseWechatQr("javascript:alert(1)")).toBeNull();
   });
 });

@@ -505,7 +505,7 @@ const en = {
   "settings.about.github": "GitHub Repository",
   "settings.about.changelog": "Changelog",
   "settings.about.feedback": "Send feedback",
-  "settings.providers.botModelTitle": "nexu Bot model",
+  "settings.providers.botModelTitle": "Bridge default model",
   "settings.providers.botModelDesc":
     "Pick the default model used by your desktop workspace.",
   "settings.providers.workspace": "Workspace",

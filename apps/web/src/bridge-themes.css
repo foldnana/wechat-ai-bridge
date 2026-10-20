@@ -1,0 +1,228 @@
+:root {
+  --bridge-hue: 150;
+  --bridge-tint-hue: 105;
+}
+.bridge-setup-progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--bridge-line);
+  border-radius: 14px;
+  background: var(--bridge-line);
+  overflow: hidden;
+  margin: 0 0 22px;
+}
+.bridge-setup-progress li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 18px;
+  background: var(--color-surface-1);
+  color: var(--bridge-muted);
+}
+.bridge-setup-progress .is-current {
+  background: var(--color-accent-subtle);
+  color: var(--bridge-ink);
+}
+.bridge-progress-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid var(--bridge-line);
+  border-radius: 50%;
+  font-size: 13px;
+}
+.bridge-setup-progress .is-complete .bridge-progress-icon {
+  background: var(--bridge-green);
+  border-color: var(--bridge-green);
+  color: white;
+}
+.bridge-setup-progress strong {
+  display: block;
+  font-size: 13px;
+  color: var(--bridge-ink);
+  font-weight: 600;
+}
+.bridge-setup-progress div > span {
+  display: block;
+  font-size: 12px;
+  margin-top: 3px;
+}
+.bridge-hero-footnote a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.bridge-form-guide {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  background: var(--color-surface-2);
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.8;
+  margin-bottom: 24px;
+  color: var(--bridge-ink);
+}
+.bridge-form-guide li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.bridge-form-guide li > span {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--bridge-line);
+  border-radius: 50%;
+  width: 23px;
+  height: 23px;
+  font-size: 11px;
+  color: var(--bridge-green);
+}
+.bridge-saved-model .bridge-saved-next {
+  display: flex;
+  width: auto;
+  gap: 7px;
+  align-items: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.bridge-saved-model {
+  flex-wrap: wrap;
+}
+.bridge-qr-instructions {
+  padding: 0;
+  background: transparent;
+  margin: 16px 0;
+}
+.bridge-qr-help {
+  font-size: 12px;
+  color: var(--bridge-muted);
+  line-height: 1.8;
+  margin-top: 18px;
+}
+.bridge-qr-help summary {
+  cursor: pointer;
+  color: var(--bridge-green);
+}
+.bridge-qr-help p {
+  margin-top: 8px;
+}
+.bridge-qr-picture {
+  background: #fff;
+}
+.bridge-qr-picture img {
+  display: block;
+  object-fit: contain;
+}
+@media (max-width: 740px) {
+  .bridge-setup-progress {
+    grid-template-columns: 1fr;
+  }
+  .bridge-setup-progress li {
+    padding: 12px 16px;
+  }
+  .bridge-setup-progress div {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .bridge-setup-progress div > span {
+    text-align: right;
+    margin-top: 0;
+  }
+}
+:root[data-bridge-theme="ocean"] {
+  --bridge-hue: 212;
+  --bridge-tint-hue: 215;
+}
+:root[data-bridge-theme="iris"] {
+  --bridge-hue: 267;
+  --bridge-tint-hue: 265;
+}
+:root[data-bridge-theme="sand"] {
+  --bridge-hue: 30;
+  --bridge-tint-hue: 35;
+}
+.bridge-theme-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--bridge-line);
+  border-radius: 9px;
+  font-size: 12px;
+  color: var(--bridge-ink);
+  background: var(--color-surface-1);
+}
+.bridge-theme-trigger:hover {
+  background: var(--color-surface-2);
+}
+.bridge-theme-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 20px 0 24px;
+}
+.bridge-theme-option {
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--bridge-line);
+  border-radius: 12px;
+  padding: 10px;
+  cursor: pointer;
+}
+.bridge-theme-option.is-selected {
+  border-color: var(--bridge-green);
+  box-shadow: 0 0 0 1px var(--bridge-green);
+}
+.bridge-theme-option:has(input:focus-visible) {
+  outline: 3px solid var(--bridge-green);
+  outline-offset: 4px;
+}
+.bridge-theme-option strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.bridge-theme-option > span:last-child {
+  font-size: 12px;
+  color: var(--bridge-muted);
+}
+.bridge-theme-swatch {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+  height: 64px;
+  border-radius: 7px;
+  padding: 12px;
+  margin-bottom: 5px;
+}
+.bridge-theme-swatch > span:first-child {
+  width: 15px;
+  height: 39px;
+  border-radius: 4px;
+}
+.bridge-theme-swatch > span:nth-child(2) {
+  width: 48px;
+  height: 16px;
+  border-radius: 4px;
+}
+.bridge-theme-swatch svg {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+}
+@media (max-width: 560px) {
+  .bridge-theme-trigger {
+    padding: 5px 7px;
+  }
+}

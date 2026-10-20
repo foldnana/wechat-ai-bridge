@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type * as React from "react";
+import { useRef } from "react";
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -29,8 +30,11 @@ function DialogOverlay({
 function DialogContent({
   className,
   children,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+  const returnFocus = useRef<HTMLElement | null>(null);
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -44,12 +48,30 @@ function DialogContent({
           "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           className,
         )}
+        onOpenAutoFocus={(event) => {
+          returnFocus.current =
+            document.activeElement instanceof HTMLElement
+              ? document.activeElement
+              : null;
+          onOpenAutoFocus?.(event);
+        }}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event);
+          if (
+            !event.defaultPrevented &&
+            returnFocus.current?.isConnected &&
+            returnFocus.current !== document.body
+          ) {
+            event.preventDefault();
+            returnFocus.current.focus();
+          }
+        }}
         {...props}
       >
         {children}
         <DialogPrimitive.Close className="absolute right-4 top-4 p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] transition-colors">
           <X size={16} />
-          <span className="sr-only">Close</span>
+          <span className="sr-only">关闭</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPortal>

@@ -3,6 +3,7 @@ import {
   postApiV1ChannelsWechatQrStart,
   postApiV1ChannelsWechatQrWait,
 } from "../../../lib/api/sdk.gen";
+import { parseWechatQr } from "./wechat-qr";
 
 export type WechatSetupPhase =
   | "idle"
@@ -34,6 +35,7 @@ export async function runWechatSetup(
 ) {
   phase("loading");
   let sessionKey: string | undefined;
+  let invalidQr = false;
   for (let attempt = 0; attempt < 3; attempt++) {
     signal.throwIfAborted();
     try {
@@ -42,8 +44,13 @@ export async function runWechatSetup(
       });
       signal.throwIfAborted();
       if (data?.sessionKey && data.qrDataUrl) {
+        const parsed = parseWechatQr(data.qrDataUrl);
+        if (!parsed) {
+          invalidQr = true;
+          break;
+        }
         sessionKey = data.sessionKey;
-        qr(data.qrDataUrl);
+        qr(parsed.value);
         break;
       }
     } catch {
@@ -51,6 +58,10 @@ export async function runWechatSetup(
     }
     if (attempt < 2) await delay(signal);
   }
+  if (invalidQr)
+    throw new Error(
+      "服务返回的不是有效授权二维码。请确认已启动真实本地服务，重新打开软件后再试。",
+    );
   if (!sessionKey)
     throw new Error("获取二维码失败，请检查网络及本地服务，然后重试。");
   phase("scanning");

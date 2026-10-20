@@ -4,7 +4,8 @@ This repository is wechat-ai-bridge, a Windows-first local WeChat AI connection 
 
 ## Product decisions
 
-- Serve nontechnical users: install, enter their own API key, test the selected model, authorize WeChat, verify an actual reply.
+- Sell a quick local AI-to-WeChat setup tool for nontechnical users. The primary value is preparing and managing the runtime environment, configuring the user's own API and connecting WeChat.
+- Keep setup short: install and prepare the environment, configure/test the model, authorize WeChat, then show connection status. Offer an optional suggested message or copy button; never require a first reply or user confirmation to finish setup or unlock features.
 - BYOK only. No hosted AI quota, cloud hosting, required Nexu account, credits, rewards or promotional integrations.
 - First release: Windows and personal WeChat ClawBot only. Ordinary group bots and ordinary discoverable WeChat accounts are not promised.
 - User-authored presets, new conversations and explicit local data cleanup; no proprietary chat persona service.
@@ -26,7 +27,7 @@ This repository is wechat-ai-bridge, a Windows-first local WeChat AI connection 
 
 Use pnpm. After relevant changes run typecheck and lint; run targeted tests for changed behavior. After API/schema changes regenerate types. Validate Windows packaged behavior separately from development mode.
 
-The first milestone is a reproducible baseline, not a release. No real WeChat or paid API tests are complete until recorded with the tested version and result. Never call a successful QR authorization a verified model reply.
+The first milestone is a reproducible baseline, not a release. Internal engineering tests still cover real message delivery and recovery; they are not mandatory customer onboarding steps. No real WeChat or paid API tests are complete until recorded with the tested version and result. Never call a successful QR authorization a verified model reply.
 
 ## Reference policy
 
