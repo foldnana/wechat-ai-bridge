@@ -5,6 +5,7 @@ import {
   Clock3,
   ImagePlus,
   Loader2,
+  MessagesSquare,
   Save,
   Sparkles,
   Trash2,
@@ -22,10 +23,12 @@ import {
 } from "../../lib/api/sdk.gen";
 import type { GetApiV1BridgeBehaviorResponse } from "../../lib/api/types.gen";
 import { client } from "../lib/api";
+import { chatRecipes } from "../lib/bridge-chat-recipes";
 
 type Config = Required<
-  Omit<GetApiV1BridgeBehaviorResponse, "stickers" | "proactive">
+  Omit<GetApiV1BridgeBehaviorResponse, "stickers" | "proactive" | "delivery">
 > & {
+  delivery: Required<NonNullable<GetApiV1BridgeBehaviorResponse["delivery"]>>;
   stickers: Required<NonNullable<GetApiV1BridgeBehaviorResponse["stickers"]>>;
   proactive: Required<NonNullable<GetApiV1BridgeBehaviorResponse["proactive"]>>;
 };
@@ -34,6 +37,10 @@ const defaults: Config = {
   tone: "natural",
   length: "balanced",
   emoji: "occasional",
+  followUp: "natural",
+  actions: "off",
+  examples: "",
+  delivery: { mode: "single", maxBubbles: 2, pauseMs: 1200 },
   stickers: { enabled: false, probability: 25, cooldownMinutes: 10 },
   proactive: {
     enabled: false,
@@ -49,6 +56,7 @@ const defaults: Config = {
 };
 const tabs = [
   { id: "chat", label: "聊天方式", icon: Sparkles },
+  { id: "rhythm", label: "接话与节奏", icon: MessagesSquare },
   { id: "stickers", label: "表情图库", icon: ImagePlus },
   { id: "proactive", label: "主动聊天", icon: Clock3 },
 ] as const;
@@ -104,6 +112,7 @@ export function BehaviorPage() {
     ...query.data,
     stickers: { ...defaults.stickers, ...query.data?.stickers },
     proactive: { ...defaults.proactive, ...query.data?.proactive },
+    delivery: { ...defaults.delivery, ...query.data?.delivery },
   };
   const save = useMutation({
     mutationFn: async () =>
@@ -122,6 +131,8 @@ export function BehaviorPage() {
     update({ proactive: { ...config.proactive, ...patch } });
   const patchStickers = (patch: Partial<Config["stickers"]>) =>
     update({ stickers: { ...config.stickers, ...patch } });
+  const patchDelivery = (patch: Partial<Config["delivery"]>) =>
+    update({ delivery: { ...config.delivery, ...patch } });
   const wechat =
     channels.data?.channels.filter((c) => c.channelType === "wechat") ?? [];
   const validationMessage =
@@ -309,6 +320,123 @@ export function BehaviorPage() {
                         </select>
                       </label>
                     </>
+                  ) : tab === "rhythm" ? (
+                    <>
+                      <h2>像聊天一样，一句接一句。</h2>
+                      <p className="bridge-behavior-hint">
+                        只拆分简短闲聊；长回答、代码和链接保持完整。
+                      </p>
+                      <div className="bridge-proactive-fields bridge-rhythm-fields">
+                        <label className="bridge-field">
+                          发送方式
+                          <select
+                            value={config.delivery.mode}
+                            onChange={(e) =>
+                              patchDelivery({
+                                mode: e.target
+                                  .value as Config["delivery"]["mode"],
+                              })
+                            }
+                          >
+                            <option value="single">整段发送</option>
+                            <option value="natural">短句分条发送</option>
+                          </select>
+                        </label>
+                        <label className="bridge-field">
+                          一段回答最多拆成
+                          <select
+                            disabled={config.delivery.mode === "single"}
+                            value={config.delivery.maxBubbles}
+                            onChange={(e) =>
+                              patchDelivery({
+                                maxBubbles: Number(e.target.value),
+                              })
+                            }
+                          >
+                            <option value={2}>2 条消息</option>
+                            <option value={3}>3 条消息</option>
+                          </select>
+                        </label>
+                        <label className="bridge-field">
+                          分条之间停顿
+                          <select
+                            disabled={config.delivery.mode === "single"}
+                            value={config.delivery.pauseMs}
+                            onChange={(e) =>
+                              patchDelivery({ pauseMs: Number(e.target.value) })
+                            }
+                          >
+                            {[
+                              ...new Set([
+                                500,
+                                1200,
+                                1800,
+                                3000,
+                                config.delivery.pauseMs,
+                              ]),
+                            ]
+                              .sort((a, b) => a - b)
+                              .map((n) => (
+                                <option key={n} value={n}>
+                                  {n / 1000} 秒
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        <label className="bridge-field">
+                          接着问问题
+                          <select
+                            value={config.followUp}
+                            onChange={(e) =>
+                              update({
+                                followUp: e.target.value as Config["followUp"],
+                              })
+                            }
+                          >
+                            <option value="rare">少追问，允许自然结束</option>
+                            <option value="natural">
+                              顺着话题，偶尔问一句
+                            </option>
+                            <option value="curious">
+                              更好奇，但不连续盘问
+                            </option>
+                          </select>
+                        </label>
+                        <label className="bridge-field bridge-field-full">
+                          括号动作与旁白
+                          <select
+                            value={config.actions}
+                            onChange={(e) =>
+                              update({
+                                actions: e.target.value as Config["actions"],
+                              })
+                            }
+                          >
+                            <option value="off">
+                              不用动作描写，像微信聊天
+                            </option>
+                            <option value="occasional">
+                              角色扮演时偶尔使用
+                            </option>
+                          </select>
+                        </label>
+                        <label className="bridge-field bridge-field-full">
+                          你喜欢的对话示例{" "}
+                          <span className="bridge-field-optional">可选</span>
+                          <textarea
+                            rows={2}
+                            maxLength={2000}
+                            value={config.examples}
+                            placeholder={
+                              "对方：今天累死了。\n回复：那今天先到这儿。好好歇一会儿。"
+                            }
+                            onChange={(e) =>
+                              update({ examples: e.target.value })
+                            }
+                          />
+                        </label>
+                      </div>
+                    </>
                   ) : (
                     <>
                       <label className="bridge-behavior-toggle">
@@ -446,22 +574,59 @@ export function BehaviorPage() {
               <aside className="bridge-behavior-aside">
                 {tab === "chat" ? (
                   <>
-                    <div className="bridge-behavior-editorial">
-                      <span className="bridge-eyebrow">
-                        YOUR OWN LITTLE RHYTHM
-                      </span>
-                      <Sparkles size={38} strokeWidth={1.2} />
-                      <h2>
-                        不只是回答。
-                        <br />
-                        也有自己的语气。
-                      </h2>
-                      <p>
-                        先选一个舒服的聊天节奏，再用自己的预设补充称呼、习惯和偏好。
-                      </p>
+                    <div className="bridge-chat-recipes">
+                      <span className="bridge-eyebrow">MAKE IT YOURS</span>
+                      <h2>从一种相处方式开始。</h2>
+                      <p>选一个方案，微调后保存。</p>
+                      {chatRecipes.map((recipe) => {
+                        const active = Object.entries(recipe.settings).every(
+                          ([key, value]) =>
+                            JSON.stringify(config[key as keyof Config]) ===
+                            JSON.stringify(value),
+                        );
+                        return (
+                          <button
+                            key={recipe.id}
+                            type="button"
+                            aria-pressed={active}
+                            disabled={save.isPending}
+                            onClick={() => update(recipe.settings)}
+                          >
+                            <span>
+                              <strong>{recipe.name}</strong>
+                              {active ? (
+                                <Check size={14} />
+                              ) : (
+                                <ArrowUpRight size={14} />
+                              )}
+                            </span>
+                            <small>{recipe.detail}</small>
+                            <q>{recipe.sample}</q>
+                          </button>
+                        );
+                      })}
                     </div>
                     <p className="bridge-behavior-hint">
-                      语气和篇幅是给模型的偏好，实际表达由当前模型决定。表情图片的频率由程序控制。
+                      示例不会发送；实际表达由当前模型决定。方案保留预设与自写示例，主动聊天和表情需另行开启。
+                    </p>
+                  </>
+                ) : tab === "rhythm" ? (
+                  <>
+                    <div className="bridge-behavior-editorial bridge-rhythm-editorial">
+                      <span className="bridge-eyebrow">ROOM TO BREATHE</span>
+                      <MessagesSquare size={31} />
+                      <h2>
+                        不用每句话，
+                        <br />
+                        都有一个问号。
+                      </h2>
+                      <p>接住情绪、聊到哪儿算哪儿。需要帮忙时，再认真展开。</p>
+                    </div>
+                    <p className="bridge-behavior-hint">
+                      示例会随聊天偏好发送给你配置的模型，用于学习表达方式，不作为共同记忆。适用于所有会话，请勿填写某个联系人的私密资料。
+                    </p>
+                    <p className="bridge-behavior-hint">
+                      上下文沿用当前对话；新对话重新开始。本次不额外建立长期记忆。分条停顿不额外调用模型，暂停或发送失败会停止后续分条。
                     </p>
                   </>
                 ) : (

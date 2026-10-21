@@ -20,6 +20,7 @@ import { beginBridgeActivity } from "../storage/bridge-activity.js";
 import { bridgeRepliesPaused } from "../storage/bridge-control.js";
 import {
   chooseSticker,
+  loadBehavior,
   stripStickerMarkers,
 } from "../storage/bridge-behavior.js";
 import { redactBody, redactToken } from "../util/redact.js";
@@ -36,6 +37,7 @@ import type { WeixinInboundMediaOpts } from "./inbound.js";
 import { sendWeixinMediaFile } from "./send-media.js";
 import { markdownToPlainText, sendMessageWeixin } from "./send.js";
 import { handleSlashCommand } from "./slash-commands.js";
+import { replyBubbles, sendReplyBubbles } from "./bridge-reply-rhythm.js";
 
 const MEDIA_OUTBOUND_TEMP_DIR = path.join(
   resolvePreferredOpenClawTmpDir(),
@@ -55,6 +57,7 @@ export type ProcessMessageDeps = {
   errLog: (m: string) => void;
   onAuthorized?: (message: WeixinMessage) => void;
   proactiveValid?: () => boolean;
+  abortSignal?: AbortSignal;
 };
 
 /** Extract text body from item_list (for slash command detection). */
@@ -79,7 +82,10 @@ export async function processOneMessage(
   deps: ProcessMessageDeps,
 ): Promise<boolean> {
   // Messages received while paused are intentionally ignored, not queued.
-  if (bridgeRepliesPaused() || (deps.proactiveValid && !deps.proactiveValid()))
+  if (
+    deps.abortSignal?.aborted || bridgeRepliesPaused() ||
+    (deps.proactiveValid && !deps.proactiveValid())
+  )
     return false;
   let delivered = false;
   if (!deps?.channelRuntime) {
@@ -359,6 +365,7 @@ export async function processOneMessage(
       humanDelay,
       typingCallbacks,
       deliver: async (payload) => {
+        if (deps.abortSignal?.aborted || bridgeRepliesPaused()) return;
         if (deps.proactiveValid && (!deps.proactiveValid() || payload.isError))
           return;
         const text = markdownToPlainText(
@@ -451,19 +458,30 @@ export async function processOneMessage(
             logger.info(`outbound: media sent OK to=${ctx.To}`);
           } else if (text.trim()) {
             logger.debug(`outbound: sending text message to=${ctx.To}`);
-            await sendMessageWeixin({
-              to: ctx.To,
-              text,
-              opts: {
-                baseUrl: deps.baseUrl,
-                token: deps.token,
-                contextToken,
-              },
-            });
+            const rhythm = loadBehavior()?.delivery;
+            const complete = await sendReplyBubbles(
+              payload.isError
+                ? [text]
+                : replyBubbles(text, payload.text ?? "", rhythm),
+              rhythm?.pauseMs ?? 1200,
+              (bubble) => sendMessageWeixin({
+                to: ctx.To,
+                text: bubble,
+                opts: { baseUrl: deps.baseUrl, token: deps.token, contextToken },
+              }),
+              () => !bridgeRepliesPaused() &&
+                (!deps.proactiveValid || deps.proactiveValid()),
+              deps.abortSignal,
+            );
+            if (!complete) {
+              bridgeActivity.failed("send");
+              return;
+            }
             logger.info(`outbound: text sent OK to=${ctx.To}`);
           }
           if (
             sticker &&
+            !deps.abortSignal?.aborted &&
             !bridgeRepliesPaused() &&
             (!deps.proactiveValid || deps.proactiveValid())
           ) {

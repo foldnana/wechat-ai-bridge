@@ -9,6 +9,16 @@ export const behaviorSchema = z.object({
   tone: z.enum(["natural", "warm", "concise"]).default("natural"),
   length: z.enum(["short", "balanced", "detailed"]).default("balanced"),
   emoji: z.enum(["off", "occasional", "expressive"]).default("occasional"),
+  followUp: z.enum(["rare", "natural", "curious"]).default("natural"),
+  actions: z.enum(["off", "occasional"]).default("off"),
+  examples: z.string().trim().max(2000).default(""),
+  delivery: z
+    .object({
+      mode: z.enum(["single", "natural"]).default("single"),
+      maxBubbles: z.number().int().min(2).max(3).default(2),
+      pauseMs: z.number().int().min(500).max(3000).default(1200),
+    })
+    .default({}),
   stickers: z
     .object({
       enabled: z.boolean().default(false),
@@ -72,10 +82,31 @@ export function behaviorPrompt(
     tone[config.tone],
     length[config.length],
     emoji[config.emoji],
+    "日常闲聊先回应对方此刻的内容和情绪，不把一句闲聊写成分析报告。除非问题需要，不使用标题、编号、总结或建议清单。不要复述整句提问，不要反复用‘我理解你的感受’或‘还有什么可以帮你’收尾。",
+    "顺着已有上下文接话，避免每轮重新问候。对方只是分享时可以简单回应，不急着给解决方案。对方要求具体帮助时认真回答，不能为了简短而遗漏必要内容。",
+    {
+      rare: "通常不在结尾追问；只有回答所必需的信息缺失时，才问一个具体问题。",
+      natural:
+        "不必每句都接一个问题。有真正值得接着聊的细节时，偶尔问一个具体问题；对方说要休息或结束时自然收尾。",
+      curious:
+        "可以围绕对方刚说的细节接着聊，每次最多问一个问题，避免连续盘问；对方不想聊或要结束时停止追问。",
+    }[config.followUp],
+    config.actions === "off"
+      ? "只用聊天文字表达，不添加括号动作、舞台旁白或心理描写。"
+      : "在已约定的角色扮演中可以偶尔用一句简短动作描写；普通问答不加旁白，不把虚构动作说成真实发生。",
+    "以下仅是表达方式示例，不是对方的经历或记忆；不要照抄示例、固定开场或与用户完整预设冲突的身份。",
+    config.examples ||
+      {
+        natural:
+          "对方：终于忙完了。\n回复：终于能喘口气了。今天辛苦啦。\n对方：先去睡了。\n回复：去吧，晚安。",
+        warm: "对方：今天什么都没做成。\n回复：有时候一天就是会这样。先歇一会儿，别急着给今天打分。\n对方：不想说话。\n回复：好，那就安静待会儿。想聊的时候再来。",
+        concise:
+          "对方：两个方案选不出来。\n回复：把两个方案发我，我帮你看看差别。\n对方：搞定了。\n回复：好，收工。",
+      }[config.tone],
     config.stickers.enabled && items.length
       ? `可选表情图库（只依据标签选择，不需要读取文件）：${JSON.stringify(items.map(({ id, label, tags }) => ({ id, label, tags })))}。合适时在正常文字末尾添加一个 [[sticker:ID]]，ID 必须来自图库；没有合适的就不加。不要声称图片已经发送，发送由程序决定。`
       : "不要输出表情图库标记。",
-    "这些偏好不改变用户当前问题。不要虚构实时信息、经历或外部行动。",
+    "完整预设中的身份与关系设定、用户当前明确要求优先于以上通用风格示例。这些偏好不改变用户当前问题。不要虚构实时信息、经历、未提供的共同记忆或外部行动。不要主动反复声明 AI 身份；被问及时如实说明。",
   ].join("\n");
 }
 export async function readBehavior(root: string) {

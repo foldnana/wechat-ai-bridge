@@ -56,6 +56,27 @@ async function setup() {
   return { root, account, config, scheduler, inbound, advance, now: () => now };
 }
 describe("behavior preferences and managed sticker library", () => {
+  it("validates conversational preferences and makes examples guidance, not shared memories", () => {
+    const config = behaviorSchema.parse({
+      followUp: "rare",
+      examples: "对方：晚安。回复：明天见。",
+      delivery: { mode: "natural" },
+    });
+    const prompt = behaviorPrompt(config, []);
+    expect(prompt).toContain(config.examples);
+    expect(prompt).toContain("通常不在结尾追问");
+    expect(prompt).toContain("不是对方的经历或记忆");
+    expect(prompt).toContain("被问及时如实说明");
+    expect(behaviorSchema.safeParse({ delivery: { pauseMs: 0 } }).success).toBe(
+      false,
+    );
+    expect(
+      behaviorSchema.safeParse({ delivery: { maxBubbles: 4 } }).success,
+    ).toBe(false);
+    expect(
+      behaviorSchema.safeParse({ examples: "x".repeat(2001) }).success,
+    ).toBe(false);
+  });
   it("defaults to no stickers and no proactive messages, with bounded settings", () => {
     expect(behaviorSchema.parse({})).toMatchObject({
       persona: "auto",
@@ -101,16 +122,33 @@ describe("behavior preferences and managed sticker library", () => {
         await put({
           tone: "warm",
           persona: "none",
+          followUp: "rare",
+          examples: "对方：忙完了。回复：先歇会儿。",
+          delivery: { mode: "natural", maxBubbles: 3, pauseMs: 1800 },
           proactive: { enabled: true, channelIds: ["wechat"] },
         })
       ).status,
     ).toBe(200);
     expect(loadBehavior()?.accountHashes).toEqual([bridgeHash(account)]);
+    expect(loadBehavior()?.delivery).toEqual({
+      mode: "natural",
+      maxBubbles: 3,
+      pauseMs: 1800,
+    });
     const saved = JSON.parse(
       await readFile(path.join(root, "bridge-behavior.json"), "utf8"),
     );
     expect(saved.promptContext).toContain("温和、耐心");
     expect(saved.persona).toBe("none");
+    const roundTrip = await (
+      await app.request("/api/v1/bridge/behavior")
+    ).json();
+    expect(roundTrip).toMatchObject({
+      followUp: "rare",
+      examples: "对方：忙完了。回复：先歇会儿。",
+      delivery: { mode: "natural", maxBubbles: 3, pauseMs: 1800 },
+    });
+    expect(saved.promptContext).toContain(roundTrip.examples);
     expect(
       (await (await app.request("/api/v1/bridge/behavior")).json()).persona,
     ).toBe("none");

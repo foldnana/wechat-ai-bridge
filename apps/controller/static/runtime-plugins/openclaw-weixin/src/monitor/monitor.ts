@@ -227,6 +227,7 @@ export async function monitorWeixinProvider(
         );
 
         const delivered = await processOneMessage(full, {
+          abortSignal,
           accountId,
           config,
           channelRuntime,
@@ -244,6 +245,7 @@ export async function monitorWeixinProvider(
       await proactive.tick(
         (message, valid) =>
           processOneMessage(message, {
+            abortSignal,
             accountId,
             config,
             channelRuntime,

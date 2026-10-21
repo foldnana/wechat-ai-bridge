@@ -420,6 +420,14 @@ export type GetApiV1BridgeBehaviorResponses = {
         tone?: 'natural' | 'warm' | 'concise';
         length?: 'short' | 'balanced' | 'detailed';
         emoji?: 'off' | 'occasional' | 'expressive';
+        followUp?: 'rare' | 'natural' | 'curious';
+        actions?: 'off' | 'occasional';
+        examples?: string;
+        delivery?: {
+            mode?: 'single' | 'natural';
+            maxBubbles?: number;
+            pauseMs?: number;
+        };
         stickers?: {
             enabled?: boolean;
             probability?: number;
@@ -446,6 +454,14 @@ export type PutApiV1BridgeBehaviorData = {
         tone?: 'natural' | 'warm' | 'concise';
         length?: 'short' | 'balanced' | 'detailed';
         emoji?: 'off' | 'occasional' | 'expressive';
+        followUp?: 'rare' | 'natural' | 'curious';
+        actions?: 'off' | 'occasional';
+        examples?: string;
+        delivery?: {
+            mode?: 'single' | 'natural';
+            maxBubbles?: number;
+            pauseMs?: number;
+        };
         stickers?: {
             enabled?: boolean;
             probability?: number;
@@ -487,6 +503,14 @@ export type PutApiV1BridgeBehaviorResponses = {
         tone?: 'natural' | 'warm' | 'concise';
         length?: 'short' | 'balanced' | 'detailed';
         emoji?: 'off' | 'occasional' | 'expressive';
+        followUp?: 'rare' | 'natural' | 'curious';
+        actions?: 'off' | 'occasional';
+        examples?: string;
+        delivery?: {
+            mode?: 'single' | 'natural';
+            maxBubbles?: number;
+            pauseMs?: number;
+        };
         stickers?: {
             enabled?: boolean;
             probability?: number;

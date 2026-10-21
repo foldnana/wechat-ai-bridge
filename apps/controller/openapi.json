@@ -1017,6 +1017,54 @@
                       ],
                       "default": "occasional"
                     },
+                    "followUp": {
+                      "type": "string",
+                      "enum": [
+                        "rare",
+                        "natural",
+                        "curious"
+                      ],
+                      "default": "natural"
+                    },
+                    "actions": {
+                      "type": "string",
+                      "enum": [
+                        "off",
+                        "occasional"
+                      ],
+                      "default": "off"
+                    },
+                    "examples": {
+                      "type": "string",
+                      "maxLength": 2000,
+                      "default": ""
+                    },
+                    "delivery": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "single",
+                            "natural"
+                          ],
+                          "default": "single"
+                        },
+                        "maxBubbles": {
+                          "type": "integer",
+                          "minimum": 2,
+                          "maximum": 3,
+                          "default": 2
+                        },
+                        "pauseMs": {
+                          "type": "integer",
+                          "minimum": 500,
+                          "maximum": 3000,
+                          "default": 1200
+                        }
+                      },
+                      "default": {}
+                    },
                     "stickers": {
                       "type": "object",
                       "properties": {
@@ -1165,6 +1213,54 @@
                     ],
                     "default": "occasional"
                   },
+                  "followUp": {
+                    "type": "string",
+                    "enum": [
+                      "rare",
+                      "natural",
+                      "curious"
+                    ],
+                    "default": "natural"
+                  },
+                  "actions": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "occasional"
+                    ],
+                    "default": "off"
+                  },
+                  "examples": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "default": ""
+                  },
+                  "delivery": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "single",
+                          "natural"
+                        ],
+                        "default": "single"
+                      },
+                      "maxBubbles": {
+                        "type": "integer",
+                        "minimum": 2,
+                        "maximum": 3,
+                        "default": 2
+                      },
+                      "pauseMs": {
+                        "type": "integer",
+                        "minimum": 500,
+                        "maximum": 3000,
+                        "default": 1200
+                      }
+                    },
+                    "default": {}
+                  },
                   "stickers": {
                     "type": "object",
                     "properties": {
@@ -1289,6 +1385,54 @@
                         "expressive"
                       ],
                       "default": "occasional"
+                    },
+                    "followUp": {
+                      "type": "string",
+                      "enum": [
+                        "rare",
+                        "natural",
+                        "curious"
+                      ],
+                      "default": "natural"
+                    },
+                    "actions": {
+                      "type": "string",
+                      "enum": [
+                        "off",
+                        "occasional"
+                      ],
+                      "default": "off"
+                    },
+                    "examples": {
+                      "type": "string",
+                      "maxLength": 2000,
+                      "default": ""
+                    },
+                    "delivery": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "single",
+                            "natural"
+                          ],
+                          "default": "single"
+                        },
+                        "maxBubbles": {
+                          "type": "integer",
+                          "minimum": 2,
+                          "maximum": 3,
+                          "default": 2
+                        },
+                        "pauseMs": {
+                          "type": "integer",
+                          "minimum": 500,
+                          "maximum": 3000,
+                          "default": 1200
+                        }
+                      },
+                      "default": {}
                     },
                     "stickers": {
                       "type": "object",

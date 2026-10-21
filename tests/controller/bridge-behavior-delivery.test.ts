@@ -143,6 +143,33 @@ async function harness(text: string, beforeDelivery = () => {}) {
   return { root, deps, full };
 }
 describe("behavior settings in the actual reply delivery path", () => {
+  it("uses saved rhythm in real delivery and keeps the same context for every bubble", async () => {
+    const text = "终于可以喘一口气了。今天真的辛苦你啦！";
+    const f = await harness(text);
+    await writeBridgeJson(f.root, "bridge-behavior.json", {
+      ...behaviorSchema.parse({ delivery: { mode: "natural", pauseMs: 500 } }),
+      accountHashes: [],
+    });
+    expect(await processOneMessage(f.full, f.deps)).toBe(true);
+    expect(calls.text).toHaveBeenCalledTimes(2);
+    expect(calls.text.mock.calls.map(([call]) => call.text).join("")).toBe(
+      text,
+    );
+    for (const [call] of calls.text.mock.calls)
+      expect(call.opts.contextToken).toBe("context-for-test-peer");
+  });
+  it("stops unsent bubbles when automatic replies are paused during delivery", async () => {
+    const f = await harness("终于可以喘一口气了。今天真的辛苦你啦！");
+    await writeBridgeJson(f.root, "bridge-behavior.json", {
+      ...behaviorSchema.parse({ delivery: { mode: "natural", pauseMs: 500 } }),
+      accountHashes: [],
+    });
+    calls.text.mockImplementationOnce(async () => {
+      await writeBridgeJson(f.root, "bridge-control.json", { paused: true });
+    });
+    expect(await processOneMessage(f.full, f.deps)).toBe(false);
+    expect(calls.text).toHaveBeenCalledTimes(1);
+  });
   it("strips control markers and sends the selected local image with the same conversation context", async () => {
     const id = randomUUID();
     const f = await harness(`真好！ [[sticker:${id}]]`);
