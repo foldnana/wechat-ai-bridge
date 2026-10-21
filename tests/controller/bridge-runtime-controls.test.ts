@@ -108,7 +108,7 @@ describe("local reply controls and truthful delivery evidence", () => {
     expect(JSON.parse(await readFile(file, "utf8")).runId).toBe(latest.runId);
     expect(JSON.parse(await readFile(file, "utf8")).sentAt).toBeNull();
   });
-  it.each([{ ret: -14 }, { ret: 0, errcode: -1 }, {}])(
+  it.each([{ ret: -14 }, { ret: 0, errcode: -1 }, { ret: -14, errcode: 0 }])(
     "does not treat HTTP 200 with a rejected send as success: %j",
     async (response) => {
       vi.stubGlobal(
@@ -123,17 +123,59 @@ describe("local reply controls and truthful delivery evidence", () => {
       ).rejects.toThrow("WeChat rejected");
     },
   );
-  it("accepts the explicit successful send result", async () => {
+  it.each([{}, { ret: 0 }, { errcode: 0 }, { ret: 0, errcode: 0 }])(
+    "accepts a valid successful send result: %j",
+    async (response) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(Response.json(response)),
+      );
+      await expect(
+        sendMessage({
+          baseUrl: "https://wechat.invalid",
+          body: { msg: {} } as never,
+        }),
+      ).resolves.toBeUndefined();
+    },
+  );
+  it.each([null, [], "ok", { ret: "0" }, { errcode: null }])(
+    "rejects a malformed send response: %j",
+    async (response) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(Response.json(response)),
+      );
+      await expect(
+        sendMessage({
+          baseUrl: "https://wechat.invalid",
+          body: { msg: {} } as never,
+        }),
+      ).rejects.toThrow("Invalid WeChat send response");
+    },
+  );
+  it.each(["", "not-json"])(
+    "does not turn an invalid body into an empty success: %j",
+    async (body) => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body)));
+      await expect(
+        sendMessage({
+          baseUrl: "https://wechat.invalid",
+          body: { msg: {} } as never,
+        }),
+      ).rejects.toThrow();
+    },
+  );
+  it("does not accept an HTTP failure with an empty JSON body", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(Response.json({ ret: 0 })),
+      vi.fn().mockResolvedValue(Response.json({}, { status: 500 })),
     );
     await expect(
       sendMessage({
         baseUrl: "https://wechat.invalid",
         body: { msg: {} } as never,
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow("sendMessage 500");
   });
   it("starts a conversation through the live runtime instead of truncating a transcript", async () => {
     const request = vi.fn().mockResolvedValue({ ok: true });

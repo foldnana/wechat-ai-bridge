@@ -214,12 +214,21 @@ export async function sendMessage(
     timeoutMs: params.timeoutMs ?? DEFAULT_API_TIMEOUT_MS,
     label: "sendMessage",
   });
-  const result = JSON.parse(raw) as { ret?: number; errcode?: number };
-  if (
-    result.ret !== 0 ||
-    (result.errcode !== undefined && result.errcode !== 0)
-  ) {
-    throw new Error(`WeChat rejected message (code ${result.errcode ?? result.ret ?? "unknown"})`);
+  const result: unknown = JSON.parse(raw);
+  if (result === null || typeof result !== "object" || Array.isArray(result)) {
+    throw new Error("Invalid WeChat send response");
+  }
+  // SendMessageResp is an empty object on success. Status fields are optional;
+  // validate them when present instead of treating an omitted zero as failure.
+  for (const field of ["ret", "errcode"] as const) {
+    const code = (result as Record<string, unknown>)[field];
+    if (code === undefined) continue;
+    if (typeof code !== "number" || !Number.isSafeInteger(code)) {
+      throw new Error("Invalid WeChat send response status");
+    }
+    if (code !== 0) {
+      throw new Error(`WeChat rejected message (code ${code})`);
+    }
   }
 }
 
