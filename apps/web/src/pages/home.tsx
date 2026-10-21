@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import {
   deleteApiV1ChannelsByChannelId,
   getApiInternalDesktopDefaultModel,
+  getApiInternalDesktopReady,
   getApiV1BridgeActivity,
   getApiV1BridgeControl,
   getApiV1Channels,
@@ -76,6 +77,18 @@ export function HomePage() {
     queryKey: ["models"],
     queryFn: async () => (await getApiV1Models({ throwOnError: true })).data,
   });
+  const runtime = useQuery({
+    queryKey: ["desktop-runtime-ready"],
+    queryFn: async () =>
+      (
+        await getApiInternalDesktopReady({
+          throwOnError: true,
+          signal: AbortSignal.timeout(5000),
+        })
+      ).data,
+    refetchInterval: (query) => (query.state.data?.ready ? 10_000 : 1000),
+    retry: false,
+  });
   const live = useQuery({
     queryKey: ["bridge-live"],
     queryFn: async () =>
@@ -85,7 +98,8 @@ export function HomePage() {
           signal: AbortSignal.timeout(15_000),
         })
       ).data,
-    refetchInterval: 10_000,
+    refetchInterval: (query) =>
+      query.state.data?.gatewayConnected ? 10_000 : 1000,
     retry: false,
   });
   const activity = useQuery({
@@ -119,11 +133,29 @@ export function HomePage() {
   const hasAuthorization = wechatChannels.some(
     (channel) => channel.status === "connected",
   );
+  const serviceReadError =
+    control.isError ||
+    model.isError ||
+    inventory.isError ||
+    channels.isError ||
+    runtime.isError ||
+    live.isError;
+  const serviceError =
+    serviceReadError ||
+    runtime.data?.status === "unhealthy" ||
+    runtime.data?.status === "degraded" ||
+    runtime.data?.degraded === true;
+  const environmentReady =
+    !serviceError &&
+    runtime.data?.ready === true &&
+    live.data?.gatewayConnected === true;
+  const environmentStarting =
+    !serviceError &&
+    runtime.data?.status === "starting" &&
+    runtime.data.bootPhase !== "ready";
   const wechatReady =
-    !channels.isError &&
-    !live.isError &&
+    environmentReady &&
     hasAuthorization &&
-    live.data?.gatewayConnected &&
     wechatChannels.some(
       (channel) =>
         channel.status === "connected" &&
@@ -131,32 +163,41 @@ export function HomePage() {
           (item) => item.channelId === channel.id && item.ready,
         ),
     );
-  const serviceError =
-    control.isError || model.isError || inventory.isError || channels.isError;
   const ready = hasSelectedModel && !serviceError && wechatReady;
-  const canAuthorize = hasSelectedModel && !model.isError && !inventory.isError;
-  const environmentReady =
-    !live.isError && live.data?.gatewayConnected === true;
+  const modelConfigured =
+    hasSelectedModel && !model.isError && !inventory.isError;
+  const canAuthorize = modelConfigured && environmentReady;
   const checking =
-    control.isPending ||
-    model.isPending ||
-    inventory.isPending ||
-    channels.isPending;
+    !serviceError &&
+    !environmentStarting &&
+    (control.isPending ||
+      model.isPending ||
+      inventory.isPending ||
+      channels.isPending ||
+      runtime.isPending ||
+      live.isPending);
+  const environmentUnavailable =
+    !checking && !environmentReady && !environmentStarting;
   const paused = control.data?.paused ?? false;
   const modelName = model.data?.modelId?.split("/").pop();
-  const serviceState = live.isError
+  const serviceState = serviceReadError
     ? "状态读取失败"
-    : live.isPending
-      ? "正在检查"
-      : live.data?.gatewayConnected
-        ? "运行中"
-        : "尚未连接";
+    : serviceError
+      ? "需要检查"
+      : environmentStarting
+        ? "正在启动"
+        : checking
+          ? "正在检查"
+          : environmentReady
+            ? "运行中"
+            : "尚未连接";
   function recheck() {
     void Promise.all([
       control.refetch(),
       model.refetch(),
       inventory.refetch(),
       channels.refetch(),
+      runtime.refetch(),
       live.refetch(),
     ]);
   }
@@ -189,28 +230,30 @@ export function HomePage() {
           <div>
             <strong>环境准备</strong>
             <span>
-              {live.isPending
-                ? "正在检查本地服务"
-                : environmentReady
-                  ? "本地服务已就绪"
-                  : "本地服务尚未就绪"}
+              {environmentStarting
+                ? "本地服务正在启动"
+                : checking
+                  ? "正在检查本地服务"
+                  : environmentReady
+                    ? "本地服务已就绪"
+                    : "本地服务尚未就绪"}
             </span>
           </div>
         </li>
         <li
-          className={
-            canAuthorize ? "is-complete" : environmentReady ? "is-current" : ""
-          }
-          aria-current={environmentReady && !canAuthorize ? "step" : undefined}
+          className={modelConfigured ? "is-complete" : "is-current"}
+          aria-current={!modelConfigured ? "step" : undefined}
         >
           <span className="bridge-progress-icon">
-            {canAuthorize ? <Check size={17} /> : "1"}
+            {modelConfigured ? <Check size={17} /> : "1"}
           </span>
           <div>
             <strong>配置模型 API</strong>
             <span>
-              {canAuthorize
-                ? "配置已保存，可继续扫码"
+              {modelConfigured
+                ? canAuthorize
+                  ? "配置已保存，可继续扫码"
+                  : "配置已保存，等待服务就绪"
                 : "填写密钥 → 测试并保存"}
             </span>
           </div>
@@ -250,11 +293,13 @@ export function HomePage() {
                 ? "正在检查配置"
                 : serviceError
                   ? "需要处理 · 本地服务"
-                  : !environmentReady
-                    ? "准备环境"
-                    : canAuthorize
-                      ? "下一步 · 微信扫码授权"
-                      : "下一步 · 配置模型 API"}
+                  : environmentStarting
+                    ? "本地服务正在启动"
+                    : !environmentReady
+                      ? "准备环境"
+                      : canAuthorize
+                        ? "下一步 · 微信扫码授权"
+                        : "下一步 · 配置模型 API"}
           </span>
           <h2>
             {checking ? (
@@ -266,6 +311,12 @@ export function HomePage() {
             ) : serviceError ? (
               <>
                 先恢复<span>本地服务</span>。
+              </>
+            ) : environmentStarting ? (
+              <>
+                本地服务
+                <br />
+                <span>正在启动</span>。
               </>
             ) : !environmentReady ? (
               <>
@@ -297,19 +348,23 @@ export function HomePage() {
             {checking
               ? "正在读取本地服务、模型和微信连接状态。"
               : serviceError
-                ? "无法读取本机配置。请点击重新检查；如果仍失败，请重新打开软件。恢复前不要反复提交密钥。"
-                : !environmentReady
-                  ? "可以先配置模型。服务就绪后才能自动回复微信；请重新检查，持续未就绪时重新打开软件。"
-                  : ready
-                    ? paused
-                      ? "想聊的时候，恢复自动回复就好。"
-                      : "模型与微信已准备好，随时开启你的下一段对话。"
-                    : canAuthorize
-                      ? "点击下方按钮获取授权二维码，再打开手机微信「+ → 扫一扫」，扫码后在手机上确认。"
-                      : "准备模型服务商的 API Key，粘贴到设置页。\n点击「测试并保存模型」，成功后再连接微信。"}
+                ? serviceReadError
+                  ? "无法读取本机配置或运行状态。请点击重新检查；如果仍失败，请重新打开软件。恢复前不要反复提交密钥。"
+                  : "本地服务暂时不可用。请点击重新检查；如果仍失败，请重新打开软件。已保存的模型配置保留在本机。"
+                : environmentStarting
+                  ? "本地服务正在启动，状态会自动更新，可以先配置 API。"
+                  : !environmentReady
+                    ? "可以先配置模型。服务就绪后才能自动回复微信；请重新检查，持续未就绪时重新打开软件。"
+                    : ready
+                      ? paused
+                        ? "想聊的时候，恢复自动回复就好。"
+                        : "模型与微信已准备好，随时开启你的下一段对话。"
+                      : canAuthorize
+                        ? "点击下方按钮获取授权二维码，再打开手机微信「+ → 扫一扫」，扫码后在手机上确认。"
+                        : "准备模型服务商的 API Key，粘贴到设置页。\n点击「测试并保存模型」，成功后再连接微信。"}
           </p>
           <div className="bridge-hero-actions">
-            {serviceError || (!checking && !environmentReady) ? (
+            {serviceError || environmentUnavailable ? (
               <button type="button" className="bridge-button" onClick={recheck}>
                 重新检查服务
                 <RefreshCw size={17} />
@@ -318,7 +373,9 @@ export function HomePage() {
               <Link className="bridge-button" to="/workspace/models">
                 {model.isError || inventory.isError
                   ? "检查模型配置"
-                  : "第 1 步：配置模型 API"}
+                  : modelConfigured
+                    ? "管理 API 与模型"
+                    : "第 1 步：配置模型 API"}
                 <ArrowUpRight size={17} />
               </Link>
             ) : !hasAuthorization ? (
@@ -337,7 +394,9 @@ export function HomePage() {
               </a>
             )}
             <span className="bridge-hero-footnote">
-              {serviceError || !environmentReady ? (
+              {environmentStarting ? (
+                "服务就绪后即可扫码，首次试聊可选"
+              ) : serviceError || !environmentReady ? (
                 <Link to="/workspace/models">
                   查看模型配置 <ArrowRight size={13} />
                 </Link>
@@ -455,9 +514,11 @@ export function HomePage() {
               <span>
                 {hasAuthorization
                   ? "授权保存在本机，随时查看连接状态"
-                  : hasSelectedModel
+                  : canAuthorize
                     ? "准备好手机，扫码即可完成授权"
-                    : "先完成第 1 步模型配置，再来扫码"}
+                    : modelConfigured
+                      ? "模型已保存，服务就绪后即可扫码"
+                      : "先完成第 1 步模型配置，再来扫码"}
               </span>
             </div>
           </div>
@@ -518,7 +579,7 @@ export function HomePage() {
           ))}
         </div>
       )}
-      {showQr && (
+      {showQr && canAuthorize && (
         <div
           className="bridge-qr-expansion"
           ref={qrPanel}
@@ -568,10 +629,10 @@ export function HomePage() {
           </div>
           <div className="bridge-runtime-controls">
             <span
-              className={`bridge-runtime-label ${!live.isError && live.data?.gatewayConnected ? "is-ready" : ""}`}
+              className={`bridge-runtime-label ${environmentReady ? "is-ready" : ""}`}
             >
               <span
-                className={`bridge-dot ${!live.isError && live.data?.gatewayConnected ? "is-live" : ""}`}
+                className={`bridge-dot ${environmentReady ? "is-live" : ""}`}
               />
               本地服务 · {serviceState}
             </span>
