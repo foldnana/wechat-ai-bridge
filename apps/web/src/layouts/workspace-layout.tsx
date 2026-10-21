@@ -1,16 +1,22 @@
 import {
+  Activity,
   ArrowUpRight,
   AudioLines,
   CircleHelp,
   Command,
   Laptop,
+  LayoutGrid,
   Link2,
+  MessagesSquare,
+  Settings2,
   SlidersHorizontal,
+  Sparkles,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { BridgeMark } from "../components/bridge/bridge-mark";
 import { ThemePicker } from "../components/bridge/theme-picker";
+import { WhaleCompanion } from "../components/bridge/whale-companion";
 import {
   Dialog,
   DialogContent,
@@ -18,9 +24,41 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 
+const NAVIGATION = [
+  { path: "/workspace", label: "总览", icon: LayoutGrid, group: "工作空间" },
+  {
+    path: "/workspace/models",
+    label: "模型连接",
+    icon: SlidersHorizontal,
+    group: "连接设置",
+  },
+  { path: "/workspace/wechat", label: "微信连接", icon: Link2 },
+  {
+    path: "/workspace/preset",
+    label: "回答风格",
+    icon: Sparkles,
+    group: "日常使用",
+  },
+  { path: "/workspace/sessions", label: "对话管理", icon: MessagesSquare },
+  { path: "/workspace/behavior", label: "聊天行为", icon: Settings2 },
+  { path: "/workspace/activity", label: "运行记录", icon: Activity },
+];
+
 export function WorkspaceLayout() {
   const location = useLocation();
-  const isSettings = /\/(models|settings)/.test(location.pathname);
+  const currentPage =
+    NAVIGATION.find(
+      (item) =>
+        item.path !== "/workspace" && location.pathname.startsWith(item.path),
+    ) ?? NAVIGATION[0];
+  const main = useRef<HTMLElement>(null);
+  const previousPath = useRef(location.pathname);
+  useEffect(() => {
+    if (previousPath.current === location.pathname) return;
+    previousPath.current = location.pathname;
+    main.current?.scrollTo({ top: 0, behavior: "instant" });
+    main.current?.focus({ preventScroll: true });
+  }, [location.pathname]);
   const [helpOpen, setHelpOpen] = useState(false);
   const [motion, setMotion] = useState(() => {
     try {
@@ -39,7 +77,7 @@ export function WorkspaceLayout() {
   }, [motion]);
 
   return (
-    <div className="bridge-app">
+    <div className="bridge-app bridge-app-pages">
       <a className="bridge-skip-link" href="#bridge-main">
         跳转到主要内容
       </a>
@@ -56,30 +94,34 @@ export function WorkspaceLayout() {
             Bridge<span>微信 AI 接入助手</span>
           </span>
         </NavLink>
-        <div className="bridge-nav-label">你的工作空间</div>
         <nav className="bridge-nav" aria-label="主导航">
-          <Link
-            to="/workspace"
-            aria-label="微信连接"
-            className={`bridge-nav-link ${!isSettings ? "is-active" : ""}`}
-            aria-current={!isSettings ? "page" : undefined}
-          >
-            <Link2 size={19} />
-            <span>微信连接</span>
-            <ArrowUpRight size={15} className="bridge-nav-arrow" />
-          </Link>
-          <Link
-            to="/workspace/models"
-            aria-label="API 与模型"
-            aria-current={isSettings ? "page" : undefined}
-            className={`bridge-nav-link ${isSettings ? "is-active" : ""}`}
-          >
-            <SlidersHorizontal size={19} />
-            <span>API 与模型</span>
-            <ArrowUpRight size={15} className="bridge-nav-arrow" />
-          </Link>
+          {NAVIGATION.map((item) => (
+            <div key={item.path} className="bridge-nav-item">
+              {item.group && (
+                <div className="bridge-nav-label">{item.group}</div>
+              )}
+              <NavLink
+                to={item.path}
+                end={item.path === "/workspace"}
+                className={({ isActive }) =>
+                  `bridge-nav-link ${isActive ? "is-active" : ""}`
+                }
+              >
+                <item.icon size={18} />
+                <span>{item.label}</span>
+                <ArrowUpRight size={14} className="bridge-nav-arrow" />
+              </NavLink>
+            </div>
+          ))}
         </nav>
         <div className="bridge-sidebar-bottom">
+          <div className="bridge-whale-note">
+            <WhaleCompanion />
+            <div>
+              <strong>小鲸鱼，在这里。</strong>
+              <span>把日常，聊得软乎乎。</span>
+            </div>
+          </div>
           <div className="bridge-local-note">
             <span className="bridge-small-symbol">
               <Laptop size={18} />
@@ -113,7 +155,7 @@ export function WorkspaceLayout() {
             <Command size={15} />
             <span>工作空间</span>
             <span className="bridge-breadcrumb-divider">/</span>
-            <strong>{isSettings ? "API 与模型" : "微信连接"}</strong>
+            <strong>{currentPage?.label ?? "总览"}</strong>
           </div>
           <div className="bridge-topbar-actions">
             <ThemePicker />
@@ -141,7 +183,7 @@ export function WorkspaceLayout() {
             </button>
           </div>
         </header>
-        <main id="bridge-main" className="bridge-main" tabIndex={-1}>
+        <main ref={main} id="bridge-main" className="bridge-main" tabIndex={-1}>
           <div className="bridge-page-transition" key={location.pathname}>
             <Outlet />
           </div>
@@ -162,14 +204,14 @@ export function WorkspaceLayout() {
               <span>01</span>
               <div>
                 <strong>添加你的模型</strong>
-                <p>前往「API 与模型」，填写服务商提供的密钥，测试并保存。</p>
+                <p>前往「模型连接」，填写服务商提供的密钥，测试并保存。</p>
               </div>
             </li>
             <li>
               <span>02</span>
               <div>
                 <strong>连接你的微信</strong>
-                <p>回到「微信连接」，获取二维码，在微信中扫码并确认授权。</p>
+                <p>前往「微信连接」，获取二维码，在微信中扫码并确认授权。</p>
               </div>
             </li>
           </ol>
@@ -185,6 +227,32 @@ export function WorkspaceLayout() {
             知道了
             <ArrowUpRight size={16} />
           </button>
+          <p className="bridge-art-credit">
+            鲸鱼娘素材：
+            <a
+              href="https://github.com/YunYueSama/codex-deepseek-pet"
+              target="_blank"
+              rel="noreferrer"
+            >
+              YunYueSama / codex-deepseek-pet
+            </a>
+            。 原图未修改，界面以 CSS 播放眨眼与漂浮。
+            <a
+              href="/licenses/codex-deepseek-pet/LICENSE.txt"
+              target="_blank"
+              rel="noreferrer"
+            >
+              完整许可
+            </a>{" "}
+            ·{" "}
+            <a
+              href="/licenses/codex-deepseek-pet/ASSET_LICENSE.txt"
+              target="_blank"
+              rel="noreferrer"
+            >
+              素材来源与权利说明
+            </a>
+          </p>
         </DialogContent>
       </Dialog>
     </div>

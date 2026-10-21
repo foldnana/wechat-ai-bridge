@@ -1,8 +1,11 @@
 import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { WorkspaceLayout } from "./layouts/workspace-layout";
+import { ActivityPage } from "./pages/activity";
+import { BehaviorPage } from "./pages/behavior";
 import { BridgeSettingsPage } from "./pages/bridge-settings";
 import { HomePage } from "./pages/home";
+import { WechatPage } from "./pages/wechat";
 const ModelsPage = lazy(() =>
   import("./pages/models").then((module) => ({ default: module.ModelsPage })),
 );
@@ -10,12 +13,35 @@ export function App() {
   return (
     <Routes>
       <Route element={<WorkspaceLayout />}>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<Navigate to="/workspace" replace />} />
         <Route path="/workspace" element={<HomePage />} />
-        <Route path="/workspace/home" element={<HomePage />} />
-        <Route path="/workspace/channels" element={<HomePage />} />
-        <Route path="/workspace/settings" element={<BridgeSettingsPage />} />
-        <Route path="/workspace/models" element={<BridgeSettingsPage />} />
+        <Route
+          path="/workspace/home"
+          element={<Navigate to="/workspace" replace />}
+        />
+        <Route
+          path="/workspace/channels"
+          element={<Navigate to="/workspace/wechat" replace />}
+        />
+        <Route path="/workspace/wechat" element={<WechatPage />} />
+        <Route
+          path="/workspace/settings"
+          element={<Navigate to="/workspace/models" replace />}
+        />
+        <Route
+          path="/workspace/models"
+          element={<BridgeSettingsPage key="model" section="model" />}
+        />
+        <Route
+          path="/workspace/preset"
+          element={<BridgeSettingsPage key="preset" section="preset" />}
+        />
+        <Route
+          path="/workspace/sessions"
+          element={<BridgeSettingsPage key="sessions" section="sessions" />}
+        />
+        <Route path="/workspace/activity" element={<ActivityPage />} />
+        <Route path="/workspace/behavior" element={<BehaviorPage />} />
         <Route
           path="/workspace/models/advanced"
           element={
@@ -31,7 +57,7 @@ export function App() {
           }
         />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/workspace" replace />} />
     </Routes>
   );
 }

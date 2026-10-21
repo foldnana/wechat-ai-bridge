@@ -12,6 +12,12 @@
       "development": "./src/index.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./bridge-persona": {
+      "types": "./src/bridge-persona.ts",
+      "development": "./src/bridge-persona.ts",
+      "import": "./dist/bridge-persona.js",
+      "default": "./dist/bridge-persona.js"
     }
   },
   "scripts": {

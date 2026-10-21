@@ -11,6 +11,7 @@ import {
   pauseSession,
 } from "../api/session-guard.js";
 import { processOneMessage } from "../messaging/process-message.js";
+import { BridgeProactive } from "../messaging/bridge-proactive.js";
 import { waitForWeixinRuntime } from "../runtime.js";
 import {
   getSyncBufFilePath,
@@ -103,6 +104,7 @@ export async function monitorWeixinProvider(
   }
 
   const configManager = new WeixinConfigManager({ baseUrl, token }, log);
+  const proactive = new BridgeProactive(accountId);
 
   let normalTimeoutMs = longPollTimeoutMs ?? DEFAULT_LONG_POLL_TIMEOUT_MS;
   let nextTimeoutMs = INITIAL_POLL_TIMEOUT_MS;
@@ -130,7 +132,9 @@ export async function monitorWeixinProvider(
       ) {
         // Server-suggested timeout overrides both initial and normal timeouts.
         if (normalTimeoutMs !== resp.longpolling_timeout_ms) {
-          aLog.debug(`Server poll timeout updated: ${resp.longpolling_timeout_ms}ms`);
+          aLog.debug(
+            `Server poll timeout updated: ${resp.longpolling_timeout_ms}ms`,
+          );
           normalTimeoutMs = resp.longpolling_timeout_ms;
         }
         nextTimeoutMs = resp.longpolling_timeout_ms;
@@ -139,7 +143,9 @@ export async function monitorWeixinProvider(
         initialPollsRemaining -= 1;
         if (initialPollsRemaining <= 0) {
           nextTimeoutMs = normalTimeoutMs;
-          aLog.info(`Initial short-poll phase complete, switching to ${normalTimeoutMs}ms`);
+          aLog.info(
+            `Initial short-poll phase complete, switching to ${normalTimeoutMs}ms`,
+          );
         }
       }
       const isApiError =
@@ -220,7 +226,7 @@ export async function monitorWeixinProvider(
           full.context_token,
         );
 
-        await processOneMessage(full, {
+        const delivered = await processOneMessage(full, {
           accountId,
           config,
           channelRuntime,
@@ -230,8 +236,26 @@ export async function monitorWeixinProvider(
           typingTicket: cachedConfig.typingTicket,
           log: opts.runtime?.log ?? (() => {}),
           errLog,
+          onAuthorized: (message) => proactive.observe(message),
         });
+        if (delivered) proactive.replied(full);
       }
+      // Narrow, opt-in chat scheduler. OpenClaw cron and arbitrary tools stay disabled.
+      await proactive.tick(
+        (message, valid) =>
+          processOneMessage(message, {
+            accountId,
+            config,
+            channelRuntime,
+            baseUrl,
+            cdnBaseUrl,
+            token,
+            log,
+            errLog,
+            proactiveValid: valid,
+          }),
+        abortSignal,
+      );
     } catch (err) {
       if (abortSignal?.aborted) {
         aLog.info(`Monitor stopped (aborted)`);

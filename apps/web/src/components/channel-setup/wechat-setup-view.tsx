@@ -7,6 +7,7 @@ import { type WechatSetupPhase, runWechatSetup } from "./wechat-setup-flow";
 export interface WechatSetupViewProps {
   onConnected: () => void;
   disabled?: boolean;
+  disabledReason?: string;
   gatewayReady?: boolean;
   showHeader?: boolean;
 }
@@ -14,6 +15,7 @@ export interface WechatSetupViewProps {
 export function WechatSetupView({
   onConnected,
   disabled,
+  disabledReason,
   showHeader = true,
 }: WechatSetupViewProps) {
   const [phase, setPhase] = useState<WechatSetupPhase>("idle");
@@ -65,7 +67,8 @@ export function WechatSetupView({
           {phase === "done" && "授权已保存，接下来会检查服务是否就绪。"}
           {phase === "idle" &&
             (disabled
-              ? "请先完成第 1 步，测试并保存模型，再来获取二维码。"
+              ? (disabledReason ??
+                "请先完成第 1 步，测试并保存模型，再来获取二维码。")
               : "获取二维码后，使用微信扫码并在手机上确认授权。")}
         </output>
         {error && (

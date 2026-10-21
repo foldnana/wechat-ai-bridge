@@ -9,6 +9,9 @@ import "./i18n";
 import "./index.css";
 import "./bridge.css";
 import "./bridge-themes.css";
+import "./bridge-pages.css";
+import "./bridge-behavior.css";
+import "./bridge-whale.css";
 import { readBridgeTheme } from "./lib/bridge-theme";
 import "./lib/api";
 const queryClient = new QueryClient({

@@ -1,9 +1,9 @@
+import { WHALE_PERSONA, isDeepSeekModel } from "@nexu/shared/bridge-persona";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   ArrowUpRight,
   Check,
-  ChevronDown,
   Eye,
   EyeOff,
   KeyRound,
@@ -12,27 +12,24 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
-  SlidersHorizontal,
   Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   getApiInternalDesktopDefaultModel,
+  getApiV1BridgeBehavior,
   getApiV1BridgePreset,
   getApiV1Sessions,
   postApiV1BridgeModel,
   postApiV1BridgeSessionsByIdNew,
+  putApiV1BridgeBehavior,
   putApiV1BridgePreset,
 } from "../../lib/api/sdk.gen";
 import { BridgeConfirmDialog } from "../components/bridge/confirm-dialog";
+import { WhaleCompanion } from "../components/bridge/whale-companion";
 
-const SETTINGS_TABS = [
-  { id: "model", label: "模型连接", icon: KeyRound },
-  { id: "preset", label: "回答风格", icon: Sparkles },
-  { id: "sessions", label: "对话管理", icon: MessageCircle },
-] as const;
-type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
+type SettingsTab = "model" | "preset" | "sessions";
 const PRESET_SUGGESTIONS = [
   { label: "简洁直接", text: "请用简洁的中文回答，先给结论，再补充必要说明。" },
   { label: "耐心解释", text: "请耐心解释，用容易理解的例子帮助我掌握新知识。" },
@@ -42,9 +39,11 @@ const PRESET_SUGGESTIONS = [
   },
 ];
 
-export function BridgeSettingsPage() {
+export function BridgeSettingsPage({
+  section: tab = "model",
+}: { section?: SettingsTab }) {
   const cache = useQueryClient();
-  const [tab, setTab] = useState<SettingsTab>("model");
+  const [page, setPage] = useState(0);
   const [provider, setProvider] = useState<"deepseek" | "custom-openai">(
     "deepseek",
   );
@@ -56,13 +55,31 @@ export function BridgeSettingsPage() {
   const [resetId, setResetId] = useState<string | null>(null);
   const selected = useQuery({
     queryKey: ["desktop-default-model"],
+    enabled: tab === "model" || tab === "preset",
     queryFn: async () =>
       (await getApiInternalDesktopDefaultModel({ throwOnError: true })).data,
   });
   const preset = useQuery({
     queryKey: ["bridge-preset"],
+    enabled: tab === "preset",
     queryFn: async () =>
       (await getApiV1BridgePreset({ throwOnError: true })).data,
+  });
+  const behavior = useQuery({
+    queryKey: ["bridge-behavior"],
+    enabled: tab === "preset",
+    queryFn: async () =>
+      (await getApiV1BridgeBehavior({ throwOnError: true })).data,
+  });
+  const persona = useMutation({
+    mutationFn: async (value: "auto" | "whale" | "none") =>
+      (
+        await putApiV1BridgeBehavior({
+          body: { ...behavior.data, persona: value },
+          throwOnError: true,
+        })
+      ).data,
+    onSuccess: (data) => cache.setQueryData(["bridge-behavior"], data),
   });
   const test = useMutation({
     mutationFn: async () =>
@@ -100,6 +117,7 @@ export function BridgeSettingsPage() {
   });
   const sessions = useQuery({
     queryKey: ["bridge-sessions"],
+    enabled: tab === "sessions",
     queryFn: async () =>
       (await getApiV1Sessions({ query: { limit: 100 }, throwOnError: true }))
         .data,
@@ -121,15 +139,29 @@ export function BridgeSettingsPage() {
     sessions.data?.sessions.filter((item) =>
       ["wechat", "openclaw-weixin"].includes(item.channelType ?? ""),
     ) ?? [];
+  const sessionPage = Math.min(
+    page,
+    Math.max(0, Math.ceil(wechatSessions.length / 4) - 1),
+  );
   const presetValue = draft ?? preset.data?.preset ?? "";
+  const personaMode = behavior.data?.persona ?? "auto";
+  const whaleDefault =
+    personaMode === "whale" ||
+    (personaMode === "auto" && isDeepSeekModel(selected.data?.modelId));
   return (
-    <div className="bridge-page bridge-settings">
+    <div className={`bridge-page bridge-settings bridge-settings-${tab}`}>
       <div className="bridge-page-heading">
         <div>
-          <span className="bridge-eyebrow">MAKE IT YOURS</span>
+          <span className="bridge-eyebrow">
+            {tab === "model"
+              ? "01 / BRING YOUR OWN MODEL"
+              : tab === "preset"
+                ? "A VOICE THAT FEELS LIKE YOU"
+                : "ROOM FOR A NEW CONVERSATION"}
+          </span>
           <h1>
             {tab === "model"
-              ? "第 1 步：配置模型 API"
+              ? "先认识你的 AI。"
               : tab === "preset"
                 ? "让回答更合你的心意。"
                 : "管理你的微信对话。"}
@@ -143,60 +175,12 @@ export function BridgeSettingsPage() {
           </p>
         </div>
         <Link className="bridge-back-link" to="/workspace">
-          返回微信连接
+          返回总览
           <ArrowUpRight size={16} />
         </Link>
       </div>
-      <div
-        className="bridge-settings-tabs"
-        role="tablist"
-        aria-label="AI 设置分类"
-      >
-        {SETTINGS_TABS.map((item, index) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            id={`tab-${item.id}`}
-            aria-selected={tab === item.id}
-            aria-controls={tab === item.id ? `panel-${item.id}` : undefined}
-            tabIndex={tab === item.id ? 0 : -1}
-            className={tab === item.id ? "is-active" : ""}
-            onClick={() => setTab(item.id)}
-            onKeyDown={(event) => {
-              const next =
-                event.key === "ArrowRight"
-                  ? (index + 1) % SETTINGS_TABS.length
-                  : event.key === "ArrowLeft"
-                    ? (index + SETTINGS_TABS.length - 1) % SETTINGS_TABS.length
-                    : event.key === "Home"
-                      ? 0
-                      : event.key === "End"
-                        ? SETTINGS_TABS.length - 1
-                        : null;
-              if (next !== null) {
-                event.preventDefault();
-                const target = SETTINGS_TABS[next]?.id;
-                if (target) {
-                  setTab(target);
-                  document.getElementById(`tab-${target}`)?.focus();
-                }
-              }
-            }}
-          >
-            <item.icon size={17} />
-            {item.label}
-          </button>
-        ))}
-      </div>
       <div className="bridge-settings-grid">
-        <div
-          role="tabpanel"
-          id={`panel-${tab}`}
-          aria-labelledby={`tab-${tab}`}
-          className="bridge-settings-panel bridge-panel"
-          key={tab}
-        >
+        <div className="bridge-settings-panel bridge-panel" key={tab}>
           {tab === "model" && (
             <>
               <div className="bridge-form-heading">
@@ -208,17 +192,6 @@ export function BridgeSettingsPage() {
                   <p>这里只需要服务商提供的 API Key，不需要微信密码。</p>
                 </div>
               </div>
-              <ol className="bridge-form-guide">
-                <li>
-                  <span>1</span>选择你购买 API 的服务商类型。
-                </li>
-                <li>
-                  <span>2</span>粘贴 API Key，点击「测试并保存模型」。
-                </li>
-                <li>
-                  <span>3</span>看到测试成功后，点击「下一步：连接微信」。
-                </li>
-              </ol>
               {selected.isError && (
                 <p role="alert" className="bridge-feedback is-error">
                   已保存模型读取失败，请检查本地服务。
@@ -230,199 +203,155 @@ export function BridgeSettingsPage() {
                   <span>
                     已保存模型<strong>{selected.data.modelId}</strong>
                   </span>
-                  <Link to="/workspace?connect=1" className="bridge-saved-next">
+                  <Link to="/workspace/wechat" className="bridge-saved-next">
                     下一步：连接微信
                     <ArrowRight size={16} />
                   </Link>
                 </div>
               )}
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  test.mutate();
-                }}
-              >
-                <fieldset
-                  disabled={test.isPending || selected.isError}
-                  className="bridge-form-fields"
+              {test.data?.saved ? (
+                <div className="bridge-model-success">
+                  <span className="bridge-icon-box">
+                    <Check size={25} />
+                  </span>
+                  <h3>模型准备好了。</h3>
+                  <output aria-live="polite">{test.data.message}</output>
+                  <Link className="bridge-button" to="/workspace/wechat">
+                    下一步：连接微信 <ArrowRight size={16} />
+                  </Link>
+                  <button
+                    type="button"
+                    className="bridge-text-button"
+                    onClick={() => test.reset()}
+                  >
+                    继续修改模型
+                  </button>
+                </div>
+              ) : (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    test.mutate();
+                  }}
                 >
-                  <div className="bridge-field">
-                    <label htmlFor="bridge-provider">
-                      你使用哪种模型服务？
-                    </label>
-                    <select
-                      id="bridge-provider"
-                      value={provider}
-                      onChange={(event) => {
-                        setProvider(event.target.value as typeof provider);
-                        test.reset();
-                      }}
-                    >
-                      <option value="deepseek">DeepSeek 官方 API</option>
-                      <option value="custom-openai">
-                        其他 OpenAI 兼容服务
-                      </option>
-                    </select>
-                    <p className="bridge-field-hint">
-                      其他服务商的密钥请选择「其他 OpenAI
-                      兼容服务」，并填写其接口地址和模型名称。
-                    </p>
-                  </div>
-                  <div className="bridge-provider">
-                    <span className="bridge-provider-logo">
-                      {provider === "deepseek" ? (
-                        <img src="/model-provider-icons/deepseek.svg" alt="" />
-                      ) : (
-                        <SlidersHorizontal size={25} />
-                      )}
-                    </span>
-                    <div>
-                      <strong>
-                        {provider === "deepseek"
-                          ? "DeepSeek"
-                          : "自定义兼容接口"}
-                      </strong>
-                      <span>
-                        {provider === "deepseek"
-                          ? "简单开始，随时切换"
-                          : "使用你熟悉的模型服务"}
-                      </span>
-                    </div>
-                    <span className="bridge-badge">
-                      {provider === "deepseek" ? "默认推荐" : "自定义"}
-                    </span>
-                  </div>
-                  <div className="bridge-field">
-                    <label htmlFor="bridge-api-key">
-                      API Key<span>模型服务商提供的密钥</span>
-                    </label>
-                    <div className="bridge-password-field">
-                      <input
-                        id="bridge-api-key"
-                        type={showKey ? "text" : "password"}
-                        autoComplete="off"
-                        spellCheck={false}
-                        required
-                        maxLength={4096}
-                        value={apiKey}
+                  <fieldset
+                    disabled={test.isPending || selected.isError}
+                    className="bridge-form-fields"
+                  >
+                    <div className="bridge-field">
+                      <label htmlFor="bridge-provider">模型服务商</label>
+                      <select
+                        id="bridge-provider"
+                        value={provider}
                         onChange={(event) => {
-                          setApiKey(event.target.value);
+                          setProvider(event.target.value as typeof provider);
                           test.reset();
                         }}
-                        placeholder="粘贴你的 API Key"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowKey(!showKey)}
-                        aria-label={showKey ? "隐藏 API Key" : "显示 API Key"}
                       >
-                        {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
+                        <option value="deepseek">DeepSeek 官方 API</option>
+                        <option value="custom-openai">
+                          其他 OpenAI 兼容服务
+                        </option>
+                      </select>
                     </div>
-                  </div>
-                  <details
-                    className="bridge-advanced"
-                    open={provider === "custom-openai" ? true : undefined}
-                  >
-                    <summary>
-                      <span>
-                        <SlidersHorizontal size={15} />
-                        {provider === "custom-openai"
-                          ? "填写接口地址与模型"
-                          : "高级设置"}
-                      </span>
-                      <span>
-                        接口与模型
-                        <ChevronDown size={15} />
-                      </span>
-                    </summary>
-                    <div className="bridge-advanced-fields">
-                      {provider === "custom-openai" && (
-                        <div className="bridge-field">
-                          <label htmlFor="bridge-base-url">接口基础地址</label>
-                          <input
-                            id="bridge-base-url"
-                            type="url"
-                            required
-                            value={baseUrl}
-                            onChange={(event) => {
-                              setBaseUrl(event.target.value);
-                              test.reset();
-                            }}
-                            placeholder="https://example.com/v1"
-                          />
-                          <p className="bridge-field-hint">
-                            不要填写
-                            /chat/completions；密钥将发送到你填写的地址。
-                          </p>
-                        </div>
-                      )}
-                      <div className="bridge-field">
-                        <label htmlFor="bridge-model-name">模型名称</label>
+                    <div className="bridge-field">
+                      <label htmlFor="bridge-model-name">模型名称</label>
+                      <input
+                        id="bridge-model-name"
+                        required
+                        maxLength={200}
+                        value={model}
+                        onChange={(event) => {
+                          setModel(event.target.value);
+                          test.reset();
+                        }}
+                        placeholder="服务商提供的模型 ID"
+                      />
+                    </div>
+                    <div className="bridge-field bridge-field-full">
+                      <label htmlFor="bridge-api-key">
+                        API Key<span>模型服务商提供的密钥</span>
+                      </label>
+                      <div className="bridge-password-field">
                         <input
-                          id="bridge-model-name"
+                          id="bridge-api-key"
+                          type={showKey ? "text" : "password"}
+                          autoComplete="off"
+                          spellCheck={false}
                           required
-                          maxLength={200}
-                          value={model}
+                          maxLength={4096}
+                          value={apiKey}
                           onChange={(event) => {
-                            setModel(event.target.value);
+                            setApiKey(event.target.value);
                             test.reset();
                           }}
+                          placeholder="粘贴你的 API Key"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowKey(!showKey)}
+                          aria-label={showKey ? "隐藏 API Key" : "显示 API Key"}
+                        >
+                          {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
                       </div>
-                      <Link
-                        className="bridge-text-button"
-                        to="/workspace/models/advanced?tab=providers"
-                      >
-                        其他协议及已有供应商管理
-                        <ArrowUpRight size={15} />
-                      </Link>
                     </div>
-                  </details>
-                  <p className="bridge-form-disclosure">
-                    测试会生成一条简短回答，产生少量 API
-                    用量。测试失败不会替换已保存的模型。
-                  </p>
-                  <button
-                    type="submit"
-                    className="bridge-button bridge-button-wide"
-                  >
-                    {test.isPending ? (
-                      <>
-                        <Loader2 size={17} className="bridge-spin" />
-                        正在测试并保存…
-                      </>
-                    ) : (
-                      <>
-                        测试并保存模型
-                        <ArrowRight size={17} />
-                      </>
+                    {provider === "custom-openai" && (
+                      <div className="bridge-field bridge-field-full">
+                        <label htmlFor="bridge-base-url">接口基础地址</label>
+                        <input
+                          id="bridge-base-url"
+                          type="url"
+                          required
+                          value={baseUrl}
+                          onChange={(event) => {
+                            setBaseUrl(event.target.value);
+                            test.reset();
+                          }}
+                          placeholder="https://example.com/v1"
+                        />
+                        <p className="bridge-field-hint">
+                          填写服务商的基础地址，不包含
+                          /chat/completions。密钥将发送至此地址。
+                        </p>
+                      </div>
                     )}
-                  </button>
-                </fieldset>
-                {test.data && (
-                  <output
-                    aria-live="polite"
-                    className={`bridge-feedback ${test.data.ok ? "is-success" : "is-error"}`}
-                  >
-                    {test.data.message}
-                  </output>
-                )}
-                {test.isError && (
-                  <p role="alert" className="bridge-feedback is-error">
-                    本地服务没有及时完成请求。请刷新检查已保存模型，再决定是否重试。
-                  </p>
-                )}
-                {test.data?.saved && (
-                  <Link
-                    className="bridge-button bridge-button-wide bridge-next-step"
-                    to="/workspace?connect=1"
-                  >
-                    下一步：连接微信
-                    <ArrowRight size={16} />
-                  </Link>
-                )}
-              </form>
+                    <p className="bridge-form-disclosure">
+                      测试会生成一条简短回答，产生少量 API
+                      用量。测试失败不会替换已保存的模型。
+                    </p>
+                    <button
+                      type="submit"
+                      className="bridge-button bridge-button-wide"
+                    >
+                      {test.isPending ? (
+                        <>
+                          <Loader2 size={17} className="bridge-spin" />
+                          正在测试并保存…
+                        </>
+                      ) : (
+                        <>
+                          测试并保存模型
+                          <ArrowRight size={17} />
+                        </>
+                      )}
+                    </button>
+                  </fieldset>
+                  {test.data && (
+                    <output
+                      aria-live="polite"
+                      className={`bridge-feedback ${test.data.ok ? "is-success" : "is-error"}`}
+                    >
+                      {test.data.message}
+                    </output>
+                  )}
+                  {test.isError && (
+                    <p role="alert" className="bridge-feedback is-error">
+                      本地服务没有及时完成请求。请刷新检查已保存模型，再决定是否重试。
+                    </p>
+                  )}
+                </form>
+              )}
             </>
           )}
           {tab === "preset" && (
@@ -451,13 +380,64 @@ export function BridgeSettingsPage() {
               ) : (
                 <>
                   <div className="bridge-field">
+                    <div className="bridge-persona-setting">
+                      <label htmlFor="bridge-persona">默认人设</label>
+                      <select
+                        id="bridge-persona"
+                        value={personaMode}
+                        disabled={
+                          !behavior.data ||
+                          behavior.isError ||
+                          persona.isPending
+                        }
+                        onChange={(event) =>
+                          persona.mutate(
+                            event.target.value as "auto" | "whale" | "none",
+                          )
+                        }
+                      >
+                        <option value="auto">跟随模型 · DeepSeek 大肥鱼</option>
+                        <option value="whale">始终使用 · 大肥鱼</option>
+                        <option value="none">关闭默认人设</option>
+                      </select>
+                    </div>
+                    <p
+                      className="bridge-persona-note"
+                      role={
+                        behavior.isError || persona.isError
+                          ? "alert"
+                          : undefined
+                      }
+                    >
+                      {behavior.isError || persona.isError
+                        ? "人设设置未能读取或保存，请重试。"
+                        : presetValue.trim()
+                          ? "下方自定义内容保存后优先使用；留空恢复所选默认人设。"
+                          : whaleDefault
+                            ? "大肥鱼已就位：爱米饭、爱摸鱼，认真时很靠谱。"
+                            : personaMode === "auto"
+                              ? "连接 DeepSeek 后自动使用大肥鱼，其他模型保持普通助手。"
+                              : "当前使用普通助手风格。"}
+                      {!presetValue.trim() && personaMode !== "none" && (
+                        <button
+                          type="button"
+                          className="bridge-text-button"
+                          onClick={() => {
+                            setDraft(WHALE_PERSONA);
+                            savePreset.reset();
+                          }}
+                        >
+                          编辑大肥鱼预设
+                        </button>
+                      )}
+                    </p>
                     <label htmlFor="bridge-preset">
                       你的 AI 预设<span>可选</span>
                     </label>
                     <textarea
                       id="bridge-preset"
                       aria-label="AI 预设"
-                      rows={8}
+                      rows={6}
                       maxLength={16000}
                       disabled={preset.isPending || savePreset.isPending}
                       value={presetValue}
@@ -497,7 +477,7 @@ export function BridgeSettingsPage() {
                     <p className="bridge-field-hint">
                       下一次回复开始生效。
                       <br />
-                      留空保存可取消预设。
+                      留空保存恢复所选默认人设。
                     </p>
                     <button
                       type="button"
@@ -580,31 +560,54 @@ export function BridgeSettingsPage() {
                       <br />
                       你的对话就会出现在这里。
                     </p>
-                    <Link className="bridge-text-button" to="/workspace">
-                      回到微信连接
+                    <Link className="bridge-text-button" to="/workspace/wechat">
+                      前往微信连接
                       <ArrowRight size={16} />
                     </Link>
                   </div>
                 )}
-              {wechatSessions.map((session) => (
-                <div className="bridge-session-row" key={session.id}>
-                  <span className="bridge-session-icon">
-                    <MessageCircle size={18} />
-                  </span>
-                  <span className="bridge-session-title">
-                    {session.title || "微信对话"}
+              {wechatSessions
+                .slice(sessionPage * 4, sessionPage * 4 + 4)
+                .map((session) => (
+                  <div className="bridge-session-row" key={session.id}>
+                    <span className="bridge-session-icon">
+                      <MessageCircle size={18} />
+                    </span>
+                    <span className="bridge-session-title">
+                      {session.title || "微信对话"}
+                    </span>
+                    <button
+                      type="button"
+                      className="bridge-text-button"
+                      disabled={resetSession.isPending}
+                      onClick={() => setResetId(session.id)}
+                    >
+                      <RotateCcw size={15} />
+                      新开对话
+                    </button>
+                  </div>
+                ))}
+              {wechatSessions.length > 4 && (
+                <div className="bridge-pagination">
+                  <button
+                    type="button"
+                    disabled={sessionPage === 0}
+                    onClick={() => setPage(sessionPage - 1)}
+                  >
+                    上一页
+                  </button>
+                  <span>
+                    {sessionPage + 1} / {Math.ceil(wechatSessions.length / 4)}
                   </span>
                   <button
                     type="button"
-                    className="bridge-text-button"
-                    disabled={resetSession.isPending}
-                    onClick={() => setResetId(session.id)}
+                    disabled={(sessionPage + 1) * 4 >= wechatSessions.length}
+                    onClick={() => setPage(sessionPage + 1)}
                   >
-                    <RotateCcw size={15} />
-                    新开对话
+                    下一页
                   </button>
                 </div>
-              ))}
+              )}
               {resetSession.data && (
                 <output
                   aria-live="polite"
@@ -623,11 +626,15 @@ export function BridgeSettingsPage() {
         </div>
         <aside className="bridge-settings-aside">
           <div className="bridge-editorial-card">
-            <span className="bridge-eyebrow">A BRIDGE, NOT A BOUNDARY</span>
+            <span className="bridge-eyebrow">YOURS, BY DESIGN</span>
             <div className="bridge-editorial-art">
               <span />
               <span />
               <Sparkles size={32} strokeWidth={1.25} />
+            </div>
+            <div className="bridge-whale-editorial">
+              <WhaleCompanion />
+              <span>米饭要吃，正事也要办。</span>
             </div>
             <h2>
               {tab === "model" ? (
@@ -644,40 +651,55 @@ export function BridgeSettingsPage() {
                 </>
               ) : (
                 <>
-                  好的对话，
+                  翻开新一页，
                   <br />
-                  也值得重新开始。
+                  继续好好聊。
                 </>
               )}
             </h2>
             <p>
               {tab === "model"
-                ? "从一个 API Key 开始，把喜欢的 AI 带进每天都在用的微信。"
+                ? "只需准备服务商的 API Key，无需服务器，也不需要微信密码。"
                 : tab === "preset"
-                  ? "简洁一点，耐心一点，或是多一点幽默。用你自己的话，告诉 AI 你喜欢的方式。"
-                  : "需要切换话题时，新开对话让 AI 放下旧的上下文，带着你的预设重新出发。"}
+                  ? "简洁一点，耐心一点，或多一点幽默。告诉 AI，你喜欢的方式。"
+                  : "新开对话让 AI 放下旧的上下文，带着你的预设重新出发。"}
             </p>
-            <span className="bridge-editorial-signature">
-              Yours, by design.
-            </span>
           </div>
-          <div className="bridge-settings-tip">
-            <span className="bridge-tip-number">GOOD TO KNOW</span>
-            <h3>
-              {tab === "model"
-                ? "API Key 从哪里来？"
-                : tab === "preset"
-                  ? "预设会怎样生效？"
+          {tab === "model" ? (
+            <div className="bridge-settings-tip">
+              <h3>连接只需三小步</h3>
+              <ol className="bridge-model-instructions">
+                <li>
+                  <span>1</span>选择服务商，核对模型名称。
+                </li>
+                <li>
+                  <span>2</span>填写密钥，测试并保存。
+                </li>
+                <li>
+                  <span>3</span>前往微信连接，用手机扫码。
+                </li>
+              </ol>
+              <Link
+                to="/workspace/models/advanced?tab=providers"
+                className="bridge-text-button"
+              >
+                其他协议与供应商管理 <ArrowUpRight size={14} />
+              </Link>
+            </div>
+          ) : (
+            <div className="bridge-settings-tip">
+              <h3>
+                {tab === "preset"
+                  ? "保存后，什么时候生效？"
                   : "历史记录会被删除吗？"}
-            </h3>
-            <p>
-              {tab === "model"
-                ? "在你选择的模型服务商处创建密钥。模型用量由服务商计费，Bridge 帮你完成本机连接。"
-                : tab === "preset"
-                  ? "保存后从下一次回复开始加载，已有对话的上下文仍会保留。想从头聊，可以去「对话管理」。"
-                  : "新开对话会重置上下文，不会删除本机历史记录，也不会删除手机上的微信聊天记录。"}
-            </p>
-          </div>
+              </h3>
+              <p>
+                {tab === "preset"
+                  ? "下一次回复生效，自定义内容优先。留空恢复默认人设；想完全取消角色，请关闭默认人设。已有对话上下文保留。"
+                  : "新开对话只重置上下文，不会删除本机历史记录或手机上的微信聊天。"}
+              </p>
+            </div>
+          )}
         </aside>
       </div>
       <BridgeConfirmDialog

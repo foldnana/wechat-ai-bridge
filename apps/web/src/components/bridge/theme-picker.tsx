@@ -1,6 +1,13 @@
+import { useQuery } from "@tanstack/react-query";
 import { Check, Palette } from "lucide-react";
 import { useEffect, useState } from "react";
-import { BRIDGE_THEMES, readBridgeTheme } from "../../lib/bridge-theme";
+import { getApiInternalDesktopDefaultModel } from "../../../lib/api/sdk.gen";
+import {
+  BRIDGE_THEMES,
+  readBridgeTheme,
+  readFollowModel,
+  resolveBridgeTheme,
+} from "../../lib/bridge-theme";
 import {
   Dialog,
   DialogContent,
@@ -11,14 +18,30 @@ import {
 export function ThemePicker() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(readBridgeTheme);
+  const [followModel, setFollowModel] = useState(readFollowModel);
+  const model = useQuery({
+    queryKey: ["desktop-default-model"],
+    queryFn: async () =>
+      (await getApiInternalDesktopDefaultModel({ throwOnError: true })).data,
+  });
+  // First setup defaults to DeepSeek; a saved non-DeepSeek model uses the user's palette.
+  const effective = resolveBridgeTheme(
+    selected,
+    followModel,
+    model.data?.modelId,
+  );
   useEffect(() => {
-    document.documentElement.dataset.bridgeTheme = selected;
+    document.documentElement.dataset.bridgeTheme = effective;
     try {
       localStorage.setItem("bridge-theme", selected);
+      localStorage.setItem(
+        "bridge-theme-follow-model",
+        followModel ? "on" : "off",
+      );
     } catch {
       // The palette still works when optional preference storage is unavailable.
     }
-  }, [selected]);
+  }, [selected, effective, followModel]);
   return (
     <>
       <button
@@ -37,22 +60,39 @@ export function ThemePicker() {
             选一种喜欢的颜色。
           </DialogTitle>
           <DialogDescription className="bridge-dialog-description">
-            选择后立即生效，下次打开也会记住。所有配色都保留清晰的文字和状态提示。
+            跟随模型时，DeepSeek
+            使用大肥鱼蓝。也可以选一种颜色，下次打开会记住。
           </DialogDescription>
+          <label className="bridge-theme-auto">
+            <input
+              type="checkbox"
+              checked={followModel}
+              onChange={(event) => setFollowModel(event.target.checked)}
+            />
+            <span>
+              跟随模型切换
+              <span>
+                首次配置与 DeepSeek 使用鲸鱼主题；其他模型使用上次选的配色。
+              </span>
+            </span>
+          </label>
           <fieldset className="bridge-theme-options">
             <legend className="sr-only">界面配色</legend>
             {BRIDGE_THEMES.map((theme) => (
               <label
                 key={theme.id}
-                className={`bridge-theme-option ${selected === theme.id ? "is-selected" : ""}`}
+                className={`bridge-theme-option ${effective === theme.id ? "is-selected" : ""}`}
               >
                 <input
                   className="sr-only"
                   type="radio"
                   name="bridge-theme"
                   value={theme.id}
-                  checked={selected === theme.id}
-                  onChange={() => setSelected(theme.id)}
+                  checked={effective === theme.id}
+                  onChange={() => {
+                    setSelected(theme.id);
+                    setFollowModel(false);
+                  }}
                 />
                 <span
                   className="bridge-theme-swatch"
@@ -60,7 +100,7 @@ export function ThemePicker() {
                 >
                   <span style={{ background: theme.ink }} />
                   <span style={{ background: theme.ink }} />
-                  {selected === theme.id && <Check size={17} />}
+                  {effective === theme.id && <Check size={17} />}
                 </span>
                 <strong>{theme.name}</strong>
                 <span>{theme.description}</span>

@@ -19,6 +19,7 @@ const activitySchema = z.object({
   sentAt: z.string().datetime().nullable(),
   lastSuccessfulReplyAt: z.string().datetime().nullable(),
   error: z.enum(["generation", "send"]).nullable(),
+  trigger: z.literal("proactive").optional(),
 });
 
 export function registerBridgeRoutes(

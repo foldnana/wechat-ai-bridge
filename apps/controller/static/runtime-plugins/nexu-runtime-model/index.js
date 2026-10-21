@@ -72,11 +72,38 @@ const plugin = {
         return;
       }
       const preset = state.userPresets?.[ctx?.agentId];
+      let behaviorPrompt = "";
+      let persona = "auto";
+      try {
+        const behavior = JSON.parse(
+          readFileSync(
+            path.join(path.dirname(statePath), "bridge-behavior.json"),
+            "utf8",
+          ),
+        );
+        if (typeof behavior.promptContext === "string")
+          behaviorPrompt = behavior.promptContext.slice(0, 16000);
+        persona = ["auto", "whale", "none"].includes(behavior.persona)
+          ? behavior.persona
+          : "auto";
+      } catch (error) {
+        if (error?.code !== "ENOENT") persona = "none";
+        /* Missing or unreadable behavior settings do not change the base preset. */
+      }
+      const customPreset = typeof preset === "string" ? preset.trim() : "";
+      const defaultPersona =
+        persona === "whale" || (persona === "auto" && state.deepseek === true)
+          ? state.whalePersona
+          : "";
       return {
         prependSystemContext: [
           state.promptNotice,
-          typeof preset === "string" ? preset : "",
-        ].filter(Boolean).join("\n\n"),
+          customPreset ||
+            (typeof defaultPersona === "string" ? defaultPersona : ""),
+          behaviorPrompt,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
       };
     });
   },

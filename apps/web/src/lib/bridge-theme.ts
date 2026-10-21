@@ -1,4 +1,13 @@
+import { isDeepSeekModel } from "@nexu/shared/bridge-persona";
+
 export const BRIDGE_THEMES = [
+  {
+    id: "whale",
+    name: "大肥鱼蓝",
+    description: "蓝白、软乎乎",
+    ink: "#2863ce",
+    paper: "#eaf3ff",
+  },
   {
     id: "forest",
     name: "松林绿",
@@ -30,6 +39,24 @@ export const BRIDGE_THEMES = [
 ] as const;
 
 export type BridgeTheme = (typeof BRIDGE_THEMES)[number]["id"];
+
+export function resolveBridgeTheme(
+  selected: BridgeTheme,
+  followModel: boolean,
+  modelId?: string | null,
+): BridgeTheme {
+  return followModel && (!modelId || isDeepSeekModel(modelId))
+    ? "whale"
+    : selected;
+}
+
+export function readFollowModel(): boolean {
+  try {
+    return localStorage.getItem("bridge-theme-follow-model") !== "off";
+  } catch {
+    return true;
+  }
+}
 
 export function readBridgeTheme(): BridgeTheme {
   try {

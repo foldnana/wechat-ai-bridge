@@ -10,11 +10,12 @@ type Activity = {
   sentAt: string | null;
   lastSuccessfulReplyAt: string | null;
   error: "generation" | "send" | null;
+  trigger?: "proactive";
 };
 const latest = new Map<string, Activity>();
 
 /** Local status only: no message text, peer identity, API key or context token. */
-export function beginBridgeActivity(accountId: string) {
+export function beginBridgeActivity(accountId: string, proactive = false) {
   const directory = path.join(resolveStateDir(), "bridge-activity");
   const file = path.join(
     directory,
@@ -24,8 +25,11 @@ export function beginBridgeActivity(accountId: string) {
   if (!previous) {
     try {
       const parsed = JSON.parse(readFileSync(file, "utf8"));
-      if (typeof parsed.lastSuccessfulReplyAt === "string") previous = parsed.lastSuccessfulReplyAt;
-    } catch { /* No activity yet. */ }
+      if (typeof parsed.lastSuccessfulReplyAt === "string")
+        previous = parsed.lastSuccessfulReplyAt;
+    } catch {
+      /* No activity yet. */
+    }
   }
   const activity: Activity = {
     runId: randomUUID(),
@@ -34,6 +38,7 @@ export function beginBridgeActivity(accountId: string) {
     sentAt: null,
     lastSuccessfulReplyAt: previous,
     error: null,
+    ...(proactive ? { trigger: "proactive" as const } : {}),
   };
   latest.set(accountId, activity);
   const persist = (snapshot = activity) => {
@@ -43,7 +48,9 @@ export function beginBridgeActivity(accountId: string) {
       const temp = `${file}.tmp`;
       writeFileSync(temp, JSON.stringify(snapshot), { mode: 0o600 });
       renameSync(temp, file);
-    } catch { /* A status write must never break message delivery. */ }
+    } catch {
+      /* A status write must never break message delivery. */
+    }
   };
   persist();
   return {
@@ -56,7 +63,8 @@ export function beginBridgeActivity(accountId: string) {
       activity.lastSuccessfulReplyAt = activity.sentAt;
       // A slower previous message can still update the last successful time.
       const current = latest.get(accountId);
-      if (current && current !== activity) current.lastSuccessfulReplyAt = activity.sentAt;
+      if (current && current !== activity)
+        current.lastSuccessfulReplyAt = activity.sentAt;
       persist(current ?? activity);
     },
     failed(stage: "generation" | "send") {

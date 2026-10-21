@@ -320,6 +320,7 @@ export type GetApiV1BridgeActivityResponses = {
                 sentAt: string;
                 lastSuccessfulReplyAt: string;
                 error: 'generation' | 'send';
+                trigger?: 'proactive';
             };
         }>;
     };
@@ -391,6 +392,247 @@ export type PutApiV1BridgePresetResponses = {
 };
 
 export type PutApiV1BridgePresetResponse = PutApiV1BridgePresetResponses[keyof PutApiV1BridgePresetResponses];
+
+export type GetApiV1BridgeBehaviorData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/behavior';
+};
+
+export type GetApiV1BridgeBehaviorErrors = {
+    /**
+     * Invalid settings or image
+     */
+    400: {
+        error: string;
+    };
+};
+
+export type GetApiV1BridgeBehaviorError = GetApiV1BridgeBehaviorErrors[keyof GetApiV1BridgeBehaviorErrors];
+
+export type GetApiV1BridgeBehaviorResponses = {
+    /**
+     * Local behavior preferences
+     */
+    200: {
+        persona?: 'auto' | 'whale' | 'none';
+        tone?: 'natural' | 'warm' | 'concise';
+        length?: 'short' | 'balanced' | 'detailed';
+        emoji?: 'off' | 'occasional' | 'expressive';
+        stickers?: {
+            enabled?: boolean;
+            probability?: number;
+            cooldownMinutes?: number;
+        };
+        proactive?: {
+            enabled?: boolean;
+            channelIds?: Array<string>;
+            intervalMinutes?: number;
+            quietStart?: string;
+            quietEnd?: string;
+            dailyLimit?: number;
+            unansweredLimit?: number;
+            prompt?: string;
+        };
+    };
+};
+
+export type GetApiV1BridgeBehaviorResponse = GetApiV1BridgeBehaviorResponses[keyof GetApiV1BridgeBehaviorResponses];
+
+export type PutApiV1BridgeBehaviorData = {
+    body: {
+        persona?: 'auto' | 'whale' | 'none';
+        tone?: 'natural' | 'warm' | 'concise';
+        length?: 'short' | 'balanced' | 'detailed';
+        emoji?: 'off' | 'occasional' | 'expressive';
+        stickers?: {
+            enabled?: boolean;
+            probability?: number;
+            cooldownMinutes?: number;
+        };
+        proactive?: {
+            enabled?: boolean;
+            channelIds?: Array<string>;
+            intervalMinutes?: number;
+            quietStart?: string;
+            quietEnd?: string;
+            dailyLimit?: number;
+            unansweredLimit?: number;
+            prompt?: string;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/behavior';
+};
+
+export type PutApiV1BridgeBehaviorErrors = {
+    /**
+     * Invalid settings or image
+     */
+    400: {
+        error: string;
+    };
+};
+
+export type PutApiV1BridgeBehaviorError = PutApiV1BridgeBehaviorErrors[keyof PutApiV1BridgeBehaviorErrors];
+
+export type PutApiV1BridgeBehaviorResponses = {
+    /**
+     * Local behavior preferences
+     */
+    200: {
+        persona?: 'auto' | 'whale' | 'none';
+        tone?: 'natural' | 'warm' | 'concise';
+        length?: 'short' | 'balanced' | 'detailed';
+        emoji?: 'off' | 'occasional' | 'expressive';
+        stickers?: {
+            enabled?: boolean;
+            probability?: number;
+            cooldownMinutes?: number;
+        };
+        proactive?: {
+            enabled?: boolean;
+            channelIds?: Array<string>;
+            intervalMinutes?: number;
+            quietStart?: string;
+            quietEnd?: string;
+            dailyLimit?: number;
+            unansweredLimit?: number;
+            prompt?: string;
+        };
+    };
+};
+
+export type PutApiV1BridgeBehaviorResponse = PutApiV1BridgeBehaviorResponses[keyof PutApiV1BridgeBehaviorResponses];
+
+export type GetApiV1BridgeStickersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/stickers';
+};
+
+export type GetApiV1BridgeStickersErrors = {
+    /**
+     * Invalid settings or image
+     */
+    400: {
+        error: string;
+    };
+};
+
+export type GetApiV1BridgeStickersError = GetApiV1BridgeStickersErrors[keyof GetApiV1BridgeStickersErrors];
+
+export type GetApiV1BridgeStickersResponses = {
+    /**
+     * User imported sticker images
+     */
+    200: Array<{
+        id: string;
+        label: string;
+        tags: string;
+        extension: 'png' | 'jpg' | 'gif';
+    }>;
+};
+
+export type GetApiV1BridgeStickersResponse = GetApiV1BridgeStickersResponses[keyof GetApiV1BridgeStickersResponses];
+
+export type PostApiV1BridgeStickersData = {
+    body: {
+        label: string;
+        tags: string;
+        data: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/stickers';
+};
+
+export type PostApiV1BridgeStickersErrors = {
+    /**
+     * Invalid settings or image
+     */
+    400: {
+        error: string;
+    };
+};
+
+export type PostApiV1BridgeStickersError = PostApiV1BridgeStickersErrors[keyof PostApiV1BridgeStickersErrors];
+
+export type PostApiV1BridgeStickersResponses = {
+    /**
+     * User imported sticker images
+     */
+    200: Array<{
+        id: string;
+        label: string;
+        tags: string;
+        extension: 'png' | 'jpg' | 'gif';
+    }>;
+};
+
+export type PostApiV1BridgeStickersResponse = PostApiV1BridgeStickersResponses[keyof PostApiV1BridgeStickersResponses];
+
+export type DeleteApiV1BridgeStickersByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/bridge/stickers/{id}';
+};
+
+export type DeleteApiV1BridgeStickersByIdErrors = {
+    /**
+     * Invalid settings or image
+     */
+    400: {
+        error: string;
+    };
+};
+
+export type DeleteApiV1BridgeStickersByIdError = DeleteApiV1BridgeStickersByIdErrors[keyof DeleteApiV1BridgeStickersByIdErrors];
+
+export type DeleteApiV1BridgeStickersByIdResponses = {
+    /**
+     * User imported sticker images
+     */
+    200: Array<{
+        id: string;
+        label: string;
+        tags: string;
+        extension: 'png' | 'jpg' | 'gif';
+    }>;
+};
+
+export type DeleteApiV1BridgeStickersByIdResponse = DeleteApiV1BridgeStickersByIdResponses[keyof DeleteApiV1BridgeStickersByIdResponses];
+
+export type GetApiV1BridgeBehaviorStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/behavior/status';
+};
+
+export type GetApiV1BridgeBehaviorStatusResponses = {
+    /**
+     * Proactive chat runtime state without message contents
+     */
+    200: Array<{
+        channelId: string;
+        state: {
+            status: 'waiting' | 'disabled' | 'paused' | 'quiet' | 'cooldown' | 'limit' | 'expired' | 'generating' | 'sent' | 'error';
+            updatedAt: string;
+            nextAt?: string;
+            lastAttemptAt?: string;
+            attempts?: number;
+        };
+    }>;
+};
+
+export type GetApiV1BridgeBehaviorStatusResponse = GetApiV1BridgeBehaviorStatusResponses[keyof GetApiV1BridgeBehaviorStatusResponses];
 
 export type GetApiInternalDesktopUiReadyData = {
     body?: never;

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { GetApiInternalDesktopReadyResponse } from "../../apps/web/lib/api/types.gen";
 import { WorkspaceLayout } from "../../apps/web/src/layouts/workspace-layout";
 import { HomePage } from "../../apps/web/src/pages/home";
+import { WechatPage } from "../../apps/web/src/pages/wechat";
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -18,6 +19,7 @@ function renderHome(
     runtime?: Partial<GetApiInternalDesktopReadyResponse>;
     readError?: "runtime" | "live";
   } = {},
+  page: "home" | "wechat" = "home",
 ) {
   const client = new QueryClient();
   client.setQueryData(["bridge-control"], { paused: state.paused ?? false });
@@ -76,7 +78,7 @@ function renderHome(
   const html = renderToStaticMarkup(
     <QueryClientProvider client={client}>
       <MemoryRouter>
-        <HomePage />
+        {page === "home" ? <HomePage /> : <WechatPage />}
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -85,8 +87,8 @@ function renderHome(
 }
 describe("local bridge setup", () => {
   it("requires a selected model before starting QR authorization", () => {
-    const html = renderHome(null);
-    expect(html).toContain("尚未选择模型");
+    const html = renderHome(null, {}, "wechat");
+    expect(html).toContain("先配置模型 API");
     expect(html).toContain('disabled=""');
     expect(html).not.toContain("cloud-connect");
   });
@@ -96,15 +98,28 @@ describe("local bridge setup", () => {
     expect(html).not.toContain('disabled=""');
     expect(html).toContain("电脑需要保持开机");
   });
-  it("exposes only the connection and model navigation", () => {
+  it("separates setup and daily tasks into seven named pages", () => {
+    const cache = new QueryClient();
     const html = renderToStaticMarkup(
-      <MemoryRouter>
-        <WorkspaceLayout />
-      </MemoryRouter>,
+      <QueryClientProvider client={cache}>
+        <MemoryRouter>
+          <WorkspaceLayout />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
     expect(html).toContain("微信连接");
-    expect(html).toContain("API 与模型");
+    for (const label of [
+      "总览",
+      "模型连接",
+      "回答风格",
+      "对话管理",
+      "聊天行为",
+      "运行记录",
+    ]) {
+      expect(html).toContain(label);
+    }
     expect(html).not.toMatch(/rewards|skills|integrations|登录/);
+    cache.clear();
   });
   it("does not describe authorization alone as a ready connection", () => {
     const html = renderHome("deepseek/deepseek-chat", { authorized: true });
@@ -117,9 +132,9 @@ describe("local bridge setup", () => {
       ready: true,
     });
     expect(html).toContain("连接已就绪");
-    expect(html).toContain("复制示例消息");
     expect(html).toContain("可选");
-    expect(html).toContain("最近消息记录");
+    expect(html).toContain('href="/workspace/activity"');
+    expect(html).not.toContain("最近处理记录");
     expect(html).not.toContain('disabled=""');
   });
   it("keeps a paused connection distinct from an active one", () => {
@@ -177,9 +192,8 @@ describe("local bridge setup", () => {
         bootPhase: "stabilizing-runtime",
       },
     });
-    expect(html).toContain("配置已保存，等待服务就绪");
     expect(html).toContain("模型已保存，服务就绪后即可扫码");
-    expect(html).toContain('disabled=""');
+    expect(html).toContain("查看微信连接状态");
     expect(html).not.toContain("第 2 步：打开微信扫码");
     expect(html).not.toContain("重新检查服务");
   });
@@ -197,7 +211,7 @@ describe("local bridge setup", () => {
         },
       });
       expect(html).toContain("重新检查服务");
-      expect(html).toContain("本地服务暂时不可用");
+      expect(html).toContain("需要检查本地服务");
       expect(html).not.toMatch(/状态会自动更新|连接已就绪|连接已完成，/);
     },
   );
@@ -223,5 +237,34 @@ describe("local bridge setup", () => {
     });
     expect(html).toContain("重新检查服务");
     expect(html).not.toContain("本地服务正在启动，状态会自动更新");
+  });
+  it("keeps the QR panel present while readiness changes, disabling only new requests", () => {
+    for (const ready of [true, false]) {
+      const html = renderHome("deepseek/deepseek-chat", { ready }, "wechat");
+      expect(html).toContain('aria-label="微信扫码"');
+      expect(html).toContain("获取微信授权二维码");
+      expect(html.includes('disabled=""')).toBe(!ready);
+    }
+  });
+  it("keeps suggested messages optional on the authorized WeChat page", () => {
+    const html = renderHome(
+      "deepseek/deepseek-chat",
+      { authorized: true, ready: true },
+      "wechat",
+    );
+    expect(html).toContain("微信，已连接。");
+    expect(html).toContain("可选试聊");
+    expect(html).toContain("复制示例消息");
+    expect(html).not.toContain("获取微信授权二维码");
+  });
+  it("does not describe a saved authorization with failed health as connected", () => {
+    const html = renderHome(
+      "deepseek/deepseek-chat",
+      { authorized: true, ready: true, serviceError: true },
+      "wechat",
+    );
+    expect(html).toContain("授权已保存。");
+    expect(html).toContain("本地服务需要检查");
+    expect(html).not.toContain("微信，已连接。");
   });
 });

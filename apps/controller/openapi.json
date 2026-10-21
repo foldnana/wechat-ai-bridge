@@ -782,6 +782,12 @@
                                   "generation",
                                   "send"
                                 ]
+                              },
+                              "trigger": {
+                                "type": "string",
+                                "enum": [
+                                  "proactive"
+                                ]
                               }
                             },
                             "required": [
@@ -955,6 +961,754 @@
                   "required": [
                     "ok"
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bridge/behavior": {
+      "get": {
+        "tags": [
+          "Bridge"
+        ],
+        "responses": {
+          "200": {
+            "description": "Local behavior preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "persona": {
+                      "type": "string",
+                      "enum": [
+                        "auto",
+                        "whale",
+                        "none"
+                      ],
+                      "default": "auto"
+                    },
+                    "tone": {
+                      "type": "string",
+                      "enum": [
+                        "natural",
+                        "warm",
+                        "concise"
+                      ],
+                      "default": "natural"
+                    },
+                    "length": {
+                      "type": "string",
+                      "enum": [
+                        "short",
+                        "balanced",
+                        "detailed"
+                      ],
+                      "default": "balanced"
+                    },
+                    "emoji": {
+                      "type": "string",
+                      "enum": [
+                        "off",
+                        "occasional",
+                        "expressive"
+                      ],
+                      "default": "occasional"
+                    },
+                    "stickers": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "probability": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100,
+                          "default": 25
+                        },
+                        "cooldownMinutes": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1440,
+                          "default": 10
+                        }
+                      },
+                      "default": {}
+                    },
+                    "proactive": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "channelIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "maxItems": 20,
+                          "default": []
+                        },
+                        "intervalMinutes": {
+                          "type": "integer",
+                          "minimum": 5,
+                          "maximum": 1440,
+                          "default": 120
+                        },
+                        "quietStart": {
+                          "type": "string",
+                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                          "default": "22:00"
+                        },
+                        "quietEnd": {
+                          "type": "string",
+                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                          "default": "08:00"
+                        },
+                        "dailyLimit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 12,
+                          "default": 3
+                        },
+                        "unansweredLimit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 3,
+                          "default": 1
+                        },
+                        "prompt": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000,
+                          "default": "自然地问候，或接着之前的话题轻轻聊一句。不要催促回复，不要虚构实时消息。"
+                        }
+                      },
+                      "default": {}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid settings or image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Bridge"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "persona": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "whale",
+                      "none"
+                    ],
+                    "default": "auto"
+                  },
+                  "tone": {
+                    "type": "string",
+                    "enum": [
+                      "natural",
+                      "warm",
+                      "concise"
+                    ],
+                    "default": "natural"
+                  },
+                  "length": {
+                    "type": "string",
+                    "enum": [
+                      "short",
+                      "balanced",
+                      "detailed"
+                    ],
+                    "default": "balanced"
+                  },
+                  "emoji": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "occasional",
+                      "expressive"
+                    ],
+                    "default": "occasional"
+                  },
+                  "stickers": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "probability": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "default": 25
+                      },
+                      "cooldownMinutes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1440,
+                        "default": 10
+                      }
+                    },
+                    "default": {}
+                  },
+                  "proactive": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "channelIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "maxItems": 20,
+                        "default": []
+                      },
+                      "intervalMinutes": {
+                        "type": "integer",
+                        "minimum": 5,
+                        "maximum": 1440,
+                        "default": 120
+                      },
+                      "quietStart": {
+                        "type": "string",
+                        "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                        "default": "22:00"
+                      },
+                      "quietEnd": {
+                        "type": "string",
+                        "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                        "default": "08:00"
+                      },
+                      "dailyLimit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 12,
+                        "default": 3
+                      },
+                      "unansweredLimit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3,
+                        "default": 1
+                      },
+                      "prompt": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000,
+                        "default": "自然地问候，或接着之前的话题轻轻聊一句。不要催促回复，不要虚构实时消息。"
+                      }
+                    },
+                    "default": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Local behavior preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "persona": {
+                      "type": "string",
+                      "enum": [
+                        "auto",
+                        "whale",
+                        "none"
+                      ],
+                      "default": "auto"
+                    },
+                    "tone": {
+                      "type": "string",
+                      "enum": [
+                        "natural",
+                        "warm",
+                        "concise"
+                      ],
+                      "default": "natural"
+                    },
+                    "length": {
+                      "type": "string",
+                      "enum": [
+                        "short",
+                        "balanced",
+                        "detailed"
+                      ],
+                      "default": "balanced"
+                    },
+                    "emoji": {
+                      "type": "string",
+                      "enum": [
+                        "off",
+                        "occasional",
+                        "expressive"
+                      ],
+                      "default": "occasional"
+                    },
+                    "stickers": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "probability": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100,
+                          "default": 25
+                        },
+                        "cooldownMinutes": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1440,
+                          "default": 10
+                        }
+                      },
+                      "default": {}
+                    },
+                    "proactive": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "channelIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "maxItems": 20,
+                          "default": []
+                        },
+                        "intervalMinutes": {
+                          "type": "integer",
+                          "minimum": 5,
+                          "maximum": 1440,
+                          "default": 120
+                        },
+                        "quietStart": {
+                          "type": "string",
+                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                          "default": "22:00"
+                        },
+                        "quietEnd": {
+                          "type": "string",
+                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                          "default": "08:00"
+                        },
+                        "dailyLimit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 12,
+                          "default": 3
+                        },
+                        "unansweredLimit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 3,
+                          "default": 1
+                        },
+                        "prompt": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000,
+                          "default": "自然地问候，或接着之前的话题轻轻聊一句。不要催促回复，不要虚构实时消息。"
+                        }
+                      },
+                      "default": {}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid settings or image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bridge/stickers": {
+      "get": {
+        "tags": [
+          "Bridge"
+        ],
+        "responses": {
+          "200": {
+            "description": "User imported sticker images",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 30
+                      },
+                      "tags": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "extension": {
+                        "type": "string",
+                        "enum": [
+                          "png",
+                          "jpg",
+                          "gif"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label",
+                      "tags",
+                      "extension"
+                    ]
+                  },
+                  "maxItems": 24
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid settings or image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Bridge"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 30
+                  },
+                  "tags": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "data": {
+                    "type": "string",
+                    "maxLength": 2800000
+                  }
+                },
+                "required": [
+                  "label",
+                  "tags",
+                  "data"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User imported sticker images",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 30
+                      },
+                      "tags": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "extension": {
+                        "type": "string",
+                        "enum": [
+                          "png",
+                          "jpg",
+                          "gif"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label",
+                      "tags",
+                      "extension"
+                    ]
+                  },
+                  "maxItems": 24
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid settings or image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bridge/stickers/{id}": {
+      "delete": {
+        "tags": [
+          "Bridge"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User imported sticker images",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 30
+                      },
+                      "tags": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "extension": {
+                        "type": "string",
+                        "enum": [
+                          "png",
+                          "jpg",
+                          "gif"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label",
+                      "tags",
+                      "extension"
+                    ]
+                  },
+                  "maxItems": 24
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid settings or image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bridge/behavior/status": {
+      "get": {
+        "tags": [
+          "Bridge"
+        ],
+        "responses": {
+          "200": {
+            "description": "Proactive chat runtime state without message contents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "channelId": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "object",
+                        "nullable": true,
+                        "properties": {
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "waiting",
+                              "disabled",
+                              "paused",
+                              "quiet",
+                              "cooldown",
+                              "limit",
+                              "expired",
+                              "generating",
+                              "sent",
+                              "error"
+                            ]
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "nextAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "lastAttemptAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "attempts": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "status",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "channelId",
+                      "state"
+                    ]
+                  }
                 }
               }
             }

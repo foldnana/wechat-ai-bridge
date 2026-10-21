@@ -18,6 +18,10 @@ import { downloadMediaFromItem } from "../media/media-download.js";
 import { logger } from "../util/logger.js";
 import { beginBridgeActivity } from "../storage/bridge-activity.js";
 import { bridgeRepliesPaused } from "../storage/bridge-control.js";
+import {
+  chooseSticker,
+  stripStickerMarkers,
+} from "../storage/bridge-behavior.js";
 import { redactBody, redactToken } from "../util/redact.js";
 
 import { isDebugMode } from "./debug-mode.js";
@@ -49,6 +53,8 @@ export type ProcessMessageDeps = {
   typingTicket?: string;
   log: (msg: string) => void;
   errLog: (m: string) => void;
+  onAuthorized?: (message: WeixinMessage) => void;
+  proactiveValid?: () => boolean;
 };
 
 /** Extract text body from item_list (for slash command detection). */
@@ -71,15 +77,17 @@ function extractTextBody(
 export async function processOneMessage(
   full: WeixinMessage,
   deps: ProcessMessageDeps,
-): Promise<void> {
+): Promise<boolean> {
   // Messages received while paused are intentionally ignored, not queued.
-  if (bridgeRepliesPaused()) return;
+  if (bridgeRepliesPaused() || (deps.proactiveValid && !deps.proactiveValid()))
+    return false;
+  let delivered = false;
   if (!deps?.channelRuntime) {
     logger.error(
       `processOneMessage: channelRuntime is undefined, skipping message from=${full.from_user_id}`,
     );
     deps.errLog("processOneMessage: channelRuntime is undefined, skip");
-    return;
+    return false;
   }
 
   const receivedAt = Date.now();
@@ -105,7 +113,7 @@ export async function processOneMessage(
     );
     if (slashResult.handled) {
       logger.info(`[weixin] Slash command handled, skipping AI pipeline`);
-      return;
+      return false;
     }
   }
 
@@ -216,11 +224,15 @@ export async function processOneMessage(
     logger.info(
       `authorization: dropping message from=${senderId} outcome=${directDmOutcome}`,
     );
-    return;
+    return false;
   }
 
   ctx.CommandAuthorized = commandAuthorized;
-  const bridgeActivity = beginBridgeActivity(deps.accountId);
+  if (!deps.proactiveValid) deps.onAuthorized?.(full);
+  const bridgeActivity = beginBridgeActivity(
+    deps.accountId,
+    Boolean(deps.proactiveValid),
+  );
   logger.debug(
     `authorization: senderId=${senderId} commandAuthorized=${String(commandAuthorized)} senderAllowed=${String(senderAllowedForCommands)}`,
   );
@@ -347,9 +359,18 @@ export async function processOneMessage(
       humanDelay,
       typingCallbacks,
       deliver: async (payload) => {
-        const text = markdownToPlainText(payload.text ?? "");
+        if (deps.proactiveValid && (!deps.proactiveValid() || payload.isError))
+          return;
+        const text = markdownToPlainText(
+          stripStickerMarkers(payload.text ?? ""),
+        );
+        const sticker = payload.isError
+          ? undefined
+          : chooseSticker(payload.text ?? "", `${deps.accountId}\0${ctx.To}`);
         const mediaUrl = payload.mediaUrl ?? payload.mediaUrls?.[0];
-        const isAnswer = !payload.isError && Boolean(text.trim() || mediaUrl);
+        const isAnswer =
+          !payload.isError && Boolean(text.trim() || mediaUrl || sticker);
+        if (!text.trim() && !mediaUrl && !sticker) return;
         if (isAnswer) bridgeActivity.generated();
         else if (payload.isError) bridgeActivity.failed("generation");
         logger.debug(
@@ -414,7 +435,10 @@ export async function processOneMessage(
                 },
               });
               logger.info(`outbound: text sent to=${ctx.To}`);
-              if (isAnswer) bridgeActivity.sent();
+              if (isAnswer) {
+                bridgeActivity.sent();
+                delivered = true;
+              }
               return;
             }
             await sendWeixinMediaFile({
@@ -425,7 +449,7 @@ export async function processOneMessage(
               cdnBaseUrl: deps.cdnBaseUrl,
             });
             logger.info(`outbound: media sent OK to=${ctx.To}`);
-          } else {
+          } else if (text.trim()) {
             logger.debug(`outbound: sending text message to=${ctx.To}`);
             await sendMessageWeixin({
               to: ctx.To,
@@ -438,7 +462,23 @@ export async function processOneMessage(
             });
             logger.info(`outbound: text sent OK to=${ctx.To}`);
           }
-          if (isAnswer) bridgeActivity.sent();
+          if (
+            sticker &&
+            !bridgeRepliesPaused() &&
+            (!deps.proactiveValid || deps.proactiveValid())
+          ) {
+            await sendWeixinMediaFile({
+              filePath: sticker,
+              to: ctx.To,
+              text: "",
+              opts: { baseUrl: deps.baseUrl, token: deps.token, contextToken },
+              cdnBaseUrl: deps.cdnBaseUrl,
+            });
+          }
+          if (isAnswer) {
+            bridgeActivity.sent();
+            delivered = true;
+          }
         } catch (err) {
           bridgeActivity.failed("send");
           logger.error(
@@ -449,6 +489,7 @@ export async function processOneMessage(
       },
       onError: (err, info) => {
         bridgeActivity.failed("generation");
+        if (deps.proactiveValid) return;
         deps.errLog(`weixin reply ${info.kind}: ${String(err)}`);
         const errMsg = err instanceof Error ? err.message : String(err);
         let notice: string;
@@ -462,15 +503,15 @@ export async function processOneMessage(
           errMsg.includes("remote media download failed") ||
           errMsg.includes("fetch")
         ) {
-          notice = `⚠️ 媒体文件下载失败，请检查链接是否可访问。`;
+          notice = `! 媒体文件下载失败，请检查链接是否可访问。`;
         } else if (
           errMsg.includes("getUploadUrl") ||
           errMsg.includes("CDN upload") ||
           errMsg.includes("upload_param")
         ) {
-          notice = `⚠️ 媒体文件上传失败，请稍后重试。`;
+          notice = `! 媒体文件上传失败，请稍后重试。`;
         } else {
-          notice = `⚠️ 消息发送失败：${errMsg}`;
+          notice = `! 消息发送失败：${errMsg}`;
         }
         void sendWeixinErrorNotice({
           to: ctx.To,
@@ -513,7 +554,7 @@ export async function processOneMessage(
       `debug-check: accountId=${deps.accountId} debug=${String(debug)} hasContextToken=${Boolean(contextToken)} stateDir=${process.env.OPENCLAW_STATE_DIR ?? "(unset)"}`,
     );
 
-    if (debug && contextToken) {
+    if (debug && contextToken && !deps.proactiveValid) {
       const dispatchDoneAt = Date.now();
       const eventTs = full.create_time_ms ?? 0;
       const platformDelay = eventTs > 0 ? `${receivedAt - eventTs}ms` : "N/A";
@@ -562,4 +603,5 @@ export async function processOneMessage(
       }
     }
   }
+  return delivered;
 }

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { WHALE_PERSONA, isDeepSeekModel } from "@nexu/shared/bridge-persona";
 import type { ControllerEnv } from "../app/env.js";
 import { logger } from "../lib/logger.js";
 
@@ -10,6 +11,8 @@ export interface OpenClawRuntimeModelState {
   noModelMessage: string | null;
   updatedAt: string;
   userPresets?: Record<string, string>;
+  whalePersona?: string;
+  deepseek?: boolean;
 }
 
 const RUNTIME_MODEL_FALLBACK = "anthropic/claude-opus-4-6";
@@ -84,6 +87,8 @@ export class OpenClawRuntimeModelWriter {
       noModelMessage: null,
       updatedAt: new Date().toISOString(),
       userPresets,
+      whalePersona: WHALE_PERSONA,
+      deepseek: isDeepSeekModel(selectedModelRef),
     });
   }
 
