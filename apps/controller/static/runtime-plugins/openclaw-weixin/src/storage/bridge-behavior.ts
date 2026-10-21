@@ -7,6 +7,7 @@ import { bridgeRepliesPaused } from "./bridge-control.js";
 
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const schema = z.object({
+  incoming: z.object({ waitMs: z.number().int().min(0).max(60000) }).default({ waitMs: 12000 }),
   delivery: z.object({
     mode: z.enum(["single", "natural"]),
     maxBubbles: z.number().int().min(2).max(3),
@@ -19,6 +20,7 @@ const schema = z.object({
   }),
   proactive: z.object({
     enabled: z.boolean(),
+    topicMode: z.enum(["recent", "greeting"]).default("recent"),
     intervalMinutes: z.number().int().min(5).max(1440),
     quietStart: clock,
     quietEnd: clock,

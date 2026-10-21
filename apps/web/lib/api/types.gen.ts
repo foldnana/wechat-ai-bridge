@@ -417,12 +417,9 @@ export type GetApiV1BridgeBehaviorResponses = {
      */
     200: {
         persona?: 'auto' | 'whale' | 'none';
-        tone?: 'natural' | 'warm' | 'concise';
-        length?: 'short' | 'balanced' | 'detailed';
-        emoji?: 'off' | 'occasional' | 'expressive';
-        followUp?: 'rare' | 'natural' | 'curious';
-        actions?: 'off' | 'occasional';
-        examples?: string;
+        incoming?: {
+            waitMs?: number;
+        };
         delivery?: {
             mode?: 'single' | 'natural';
             maxBubbles?: number;
@@ -436,6 +433,7 @@ export type GetApiV1BridgeBehaviorResponses = {
         proactive?: {
             enabled?: boolean;
             channelIds?: Array<string>;
+            topicMode?: 'recent' | 'greeting';
             intervalMinutes?: number;
             quietStart?: string;
             quietEnd?: string;
@@ -451,12 +449,9 @@ export type GetApiV1BridgeBehaviorResponse = GetApiV1BridgeBehaviorResponses[key
 export type PutApiV1BridgeBehaviorData = {
     body: {
         persona?: 'auto' | 'whale' | 'none';
-        tone?: 'natural' | 'warm' | 'concise';
-        length?: 'short' | 'balanced' | 'detailed';
-        emoji?: 'off' | 'occasional' | 'expressive';
-        followUp?: 'rare' | 'natural' | 'curious';
-        actions?: 'off' | 'occasional';
-        examples?: string;
+        incoming?: {
+            waitMs?: number;
+        };
         delivery?: {
             mode?: 'single' | 'natural';
             maxBubbles?: number;
@@ -470,6 +465,7 @@ export type PutApiV1BridgeBehaviorData = {
         proactive?: {
             enabled?: boolean;
             channelIds?: Array<string>;
+            topicMode?: 'recent' | 'greeting';
             intervalMinutes?: number;
             quietStart?: string;
             quietEnd?: string;
@@ -500,12 +496,9 @@ export type PutApiV1BridgeBehaviorResponses = {
      */
     200: {
         persona?: 'auto' | 'whale' | 'none';
-        tone?: 'natural' | 'warm' | 'concise';
-        length?: 'short' | 'balanced' | 'detailed';
-        emoji?: 'off' | 'occasional' | 'expressive';
-        followUp?: 'rare' | 'natural' | 'curious';
-        actions?: 'off' | 'occasional';
-        examples?: string;
+        incoming?: {
+            waitMs?: number;
+        };
         delivery?: {
             mode?: 'single' | 'natural';
             maxBubbles?: number;
@@ -519,6 +512,7 @@ export type PutApiV1BridgeBehaviorResponses = {
         proactive?: {
             enabled?: boolean;
             channelIds?: Array<string>;
+            topicMode?: 'recent' | 'greeting';
             intervalMinutes?: number;
             quietStart?: string;
             quietEnd?: string;
@@ -647,7 +641,7 @@ export type GetApiV1BridgeBehaviorStatusResponses = {
     200: Array<{
         channelId: string;
         state: {
-            status: 'waiting' | 'disabled' | 'paused' | 'quiet' | 'cooldown' | 'limit' | 'expired' | 'generating' | 'sent' | 'error';
+            status: 'waiting' | 'disabled' | 'paused' | 'quiet' | 'cooldown' | 'limit' | 'expired' | 'generating' | 'resting' | 'contact-disabled' | 'sent' | 'error';
             updatedAt: string;
             nextAt?: string;
             lastAttemptAt?: string;
@@ -657,6 +651,211 @@ export type GetApiV1BridgeBehaviorStatusResponses = {
 };
 
 export type GetApiV1BridgeBehaviorStatusResponse = GetApiV1BridgeBehaviorStatusResponses[keyof GetApiV1BridgeBehaviorStatusResponses];
+
+export type GetApiV1BridgeContactsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/contacts';
+};
+
+export type GetApiV1BridgeContactsErrors = {
+    /**
+     * Contact unavailable or stale edit
+     */
+    500: {
+        error: string;
+    };
+};
+
+export type GetApiV1BridgeContactsError = GetApiV1BridgeContactsErrors[keyof GetApiV1BridgeContactsErrors];
+
+export type GetApiV1BridgeContactsResponses = {
+    /**
+     * Authorized conversations observed on this computer
+     */
+    200: Array<{
+        id: string;
+        accountHash: string;
+        lastSeen: string;
+        label: string;
+        memoryCount: number;
+        memoryEnabled: boolean;
+    }>;
+};
+
+export type GetApiV1BridgeContactsResponse = GetApiV1BridgeContactsResponses[keyof GetApiV1BridgeContactsResponses];
+
+export type GetApiV1BridgeContactsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/bridge/contacts/{id}';
+};
+
+export type GetApiV1BridgeContactsByIdErrors = {
+    /**
+     * Contact unavailable or stale edit
+     */
+    404: {
+        error: string;
+    };
+    /**
+     * Contact unavailable or stale edit
+     */
+    409: {
+        error: string;
+    };
+    /**
+     * Contact unavailable or stale edit
+     */
+    500: {
+        error: string;
+    };
+};
+
+export type GetApiV1BridgeContactsByIdError = GetApiV1BridgeContactsByIdErrors[keyof GetApiV1BridgeContactsByIdErrors];
+
+export type GetApiV1BridgeContactsByIdResponses = {
+    /**
+     * Local contact preferences
+     */
+    200: {
+        revision: string;
+        settings: {
+            label?: string;
+            nickname?: string;
+            relationship?: string;
+            instructions?: string;
+            memoryEnabled?: boolean;
+            memories?: Array<string>;
+            proactive?: 'inherit' | 'off';
+            topicMode?: 'inherit' | 'recent' | 'greeting';
+        };
+    };
+};
+
+export type GetApiV1BridgeContactsByIdResponse = GetApiV1BridgeContactsByIdResponses[keyof GetApiV1BridgeContactsByIdResponses];
+
+export type PutApiV1BridgeContactsByIdData = {
+    body: {
+        revision: string;
+        settings: {
+            label?: string;
+            nickname?: string;
+            relationship?: string;
+            instructions?: string;
+            memoryEnabled?: boolean;
+            memories?: Array<string>;
+            proactive?: 'inherit' | 'off';
+            topicMode?: 'inherit' | 'recent' | 'greeting';
+        };
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/bridge/contacts/{id}';
+};
+
+export type PutApiV1BridgeContactsByIdErrors = {
+    /**
+     * Contact unavailable or stale edit
+     */
+    404: {
+        error: string;
+    };
+    /**
+     * Contact unavailable or stale edit
+     */
+    409: {
+        error: string;
+    };
+    /**
+     * Contact unavailable or stale edit
+     */
+    500: {
+        error: string;
+    };
+};
+
+export type PutApiV1BridgeContactsByIdError = PutApiV1BridgeContactsByIdErrors[keyof PutApiV1BridgeContactsByIdErrors];
+
+export type PutApiV1BridgeContactsByIdResponses = {
+    /**
+     * Local contact preferences
+     */
+    200: {
+        revision: string;
+        settings: {
+            label?: string;
+            nickname?: string;
+            relationship?: string;
+            instructions?: string;
+            memoryEnabled?: boolean;
+            memories?: Array<string>;
+            proactive?: 'inherit' | 'off';
+            topicMode?: 'inherit' | 'recent' | 'greeting';
+        };
+    };
+};
+
+export type PutApiV1BridgeContactsByIdResponse = PutApiV1BridgeContactsByIdResponses[keyof PutApiV1BridgeContactsByIdResponses];
+
+export type DeleteApiV1BridgeContactsByIdMemoriesData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/bridge/contacts/{id}/memories';
+};
+
+export type DeleteApiV1BridgeContactsByIdMemoriesErrors = {
+    /**
+     * Contact unavailable or stale edit
+     */
+    404: {
+        error: string;
+    };
+    /**
+     * Contact unavailable or stale edit
+     */
+    409: {
+        error: string;
+    };
+    /**
+     * Contact unavailable or stale edit
+     */
+    500: {
+        error: string;
+    };
+};
+
+export type DeleteApiV1BridgeContactsByIdMemoriesError = DeleteApiV1BridgeContactsByIdMemoriesErrors[keyof DeleteApiV1BridgeContactsByIdMemoriesErrors];
+
+export type DeleteApiV1BridgeContactsByIdMemoriesResponses = {
+    /**
+     * Local contact preferences
+     */
+    200: {
+        revision: string;
+        settings: {
+            label?: string;
+            nickname?: string;
+            relationship?: string;
+            instructions?: string;
+            memoryEnabled?: boolean;
+            memories?: Array<string>;
+            proactive?: 'inherit' | 'off';
+            topicMode?: 'inherit' | 'recent' | 'greeting';
+        };
+    };
+};
+
+export type DeleteApiV1BridgeContactsByIdMemoriesResponse = DeleteApiV1BridgeContactsByIdMemoriesResponses[keyof DeleteApiV1BridgeContactsByIdMemoriesResponses];
 
 export type GetApiInternalDesktopUiReadyData = {
     body?: never;

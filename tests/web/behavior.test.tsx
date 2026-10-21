@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import { chatRecipes } from "../../apps/web/src/lib/bridge-chat-recipes";
 import { BehaviorPage } from "../../apps/web/src/pages/behavior";
 vi.mock("../../apps/web/src/lib/api", () => ({
   client: { getConfig: () => ({}) },
@@ -25,29 +24,31 @@ function render(tab: string, enabled = false) {
   return html;
 }
 describe("behavior settings pages", () => {
-  it("offers recipes without overwriting user identity, examples or outreach permission", () => {
-    for (const recipe of chatRecipes) {
-      const before = {
-        persona: "none",
-        examples: "我的示例",
-        proactive: { enabled: false },
-        stickers: { enabled: false },
-      };
-      expect({ ...before, ...recipe.settings }).toMatchObject(before);
-      expect(render("chat")).toContain(recipe.name);
-    }
-  });
   it("keeps rhythm settings on a separate page and explains context boundaries", () => {
     const html = render("rhythm");
     expect(html).toContain("短句分条发送");
-    expect(html).toContain("少追问，允许自然结束");
-    expect(html).toContain("本次不额外建立长期记忆");
+    expect(html).toContain("长期记忆在「联系人与记忆」中由你填写");
+    expect(html).toContain("等你说完再回复");
+    expect(html).toContain('value="12000" selected=""');
+    expect(html).toContain("无法感知微信正在打字");
     expect(html).not.toContain("让 AI 偶尔先开口");
+    expect(html).toContain("无需来回修改设置");
+    for (const removed of [
+      "回答长短",
+      "接着问问题",
+      "括号动作与旁白",
+      "你喜欢的对话示例",
+    ])
+      expect(html).not.toContain(removed);
   });
-  it("separates model preferences from enforced delivery rules", () => {
+  it("opens delivery controls from old chat links without expression or intent settings", () => {
     const html = render("chat");
-    expect(html).toContain("自然随和");
-    expect(html).toContain("实际表达由当前模型决定");
+    expect(html).toContain("等你说完再回复");
+    expect(html).not.toContain("我更希望它");
+    expect(html).not.toContain("responseIntent");
+    expect(html).not.toContain("可选：长期说话风格");
+    expect(html).not.toContain("文字 Emoji");
+    expect(html).not.toContain("日常一到三句");
     expect(html).toContain('href="/workspace/preset"');
   });
   it("discloses image upload boundaries and the actual WeChat image format", () => {

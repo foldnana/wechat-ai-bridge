@@ -7,8 +7,8 @@ import {
   Loader2,
   MessagesSquare,
   Save,
-  Sparkles,
   Trash2,
+  UsersRound,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -23,28 +23,27 @@ import {
 } from "../../lib/api/sdk.gen";
 import type { GetApiV1BridgeBehaviorResponse } from "../../lib/api/types.gen";
 import { client } from "../lib/api";
-import { chatRecipes } from "../lib/bridge-chat-recipes";
 
 type Config = Required<
-  Omit<GetApiV1BridgeBehaviorResponse, "stickers" | "proactive" | "delivery">
+  Omit<
+    GetApiV1BridgeBehaviorResponse,
+    "stickers" | "proactive" | "delivery" | "incoming"
+  >
 > & {
+  incoming: Required<NonNullable<GetApiV1BridgeBehaviorResponse["incoming"]>>;
   delivery: Required<NonNullable<GetApiV1BridgeBehaviorResponse["delivery"]>>;
   stickers: Required<NonNullable<GetApiV1BridgeBehaviorResponse["stickers"]>>;
   proactive: Required<NonNullable<GetApiV1BridgeBehaviorResponse["proactive"]>>;
 };
 const defaults: Config = {
   persona: "auto",
-  tone: "natural",
-  length: "balanced",
-  emoji: "occasional",
-  followUp: "natural",
-  actions: "off",
-  examples: "",
+  incoming: { waitMs: 12000 },
   delivery: { mode: "single", maxBubbles: 2, pauseMs: 1200 },
   stickers: { enabled: false, probability: 25, cooldownMinutes: 10 },
   proactive: {
     enabled: false,
     channelIds: [],
+    topicMode: "recent",
     intervalMinutes: 120,
     quietStart: "22:00",
     quietEnd: "08:00",
@@ -55,7 +54,6 @@ const defaults: Config = {
   },
 };
 const tabs = [
-  { id: "chat", label: "聊天方式", icon: Sparkles },
   { id: "rhythm", label: "接话与节奏", icon: MessagesSquare },
   { id: "stickers", label: "表情图库", icon: ImagePlus },
   { id: "proactive", label: "主动聊天", icon: Clock3 },
@@ -71,6 +69,8 @@ const statusLabels: Record<string, string> = {
   generating: "正在准备主动消息",
   sent: "微信已接受发送",
   error: "本次未发出，收到新消息后再尝试",
+  resting: "对方说要休息，等下一条消息再恢复",
+  "contact-disabled": "此会话关闭了主动联系，或资料无法读取",
 };
 function errorMessage(error: unknown, fallback: string) {
   return error &&
@@ -84,7 +84,7 @@ function errorMessage(error: unknown, fallback: string) {
 export function BehaviorPage() {
   const cache = useQueryClient();
   const [params, setParams] = useSearchParams();
-  const tab = tabs.find((t) => t.id === params.get("tab"))?.id ?? "chat";
+  const tab = tabs.find((t) => t.id === params.get("tab"))?.id ?? "rhythm";
   const [draft, setDraft] = useState<Config | null>(null);
   const query = useQuery({
     queryKey: ["bridge-behavior"],
@@ -113,6 +113,7 @@ export function BehaviorPage() {
     stickers: { ...defaults.stickers, ...query.data?.stickers },
     proactive: { ...defaults.proactive, ...query.data?.proactive },
     delivery: { ...defaults.delivery, ...query.data?.delivery },
+    incoming: { ...defaults.incoming, ...query.data?.incoming },
   };
   const save = useMutation({
     mutationFn: async () =>
@@ -153,12 +154,12 @@ export function BehaviorPage() {
               ? "开启主动聊天前，请先选择一个微信连接。"
               : "";
   return (
-    <div className="bridge-page bridge-behavior-page">
+    <div className={`bridge-page bridge-behavior-page is-${tab}`}>
       <header className="bridge-page-heading">
         <div>
           <span className="bridge-eyebrow">A LITTLE MORE PERSONAL</span>
           <h1>聊天，可以更有温度。</h1>
-          <p>说话的方式、一个表情、偶尔的问候，都由你决定。</p>
+          <p>连接后直接聊，这里管理接话节奏、表情与主动问候。</p>
         </div>
         <Link to="/workspace/preset" className="bridge-back-link">
           编写完整预设 <ArrowUpRight size={16} />
@@ -170,12 +171,16 @@ export function BehaviorPage() {
             key={t.id}
             type="button"
             aria-current={tab === t.id ? "page" : undefined}
-            onClick={() => setParams(t.id === "chat" ? {} : { tab: t.id })}
+            onClick={() => setParams(t.id === "rhythm" ? {} : { tab: t.id })}
           >
             <t.icon size={16} />
             {t.label}
           </button>
         ))}
+        <Link to="/workspace/behavior/contacts">
+          <UsersRound size={16} />
+          联系人与记忆
+        </Link>
       </nav>
       {query.isError ? (
         <div className="bridge-feedback is-error" role="alert">
@@ -256,71 +261,7 @@ export function BehaviorPage() {
             <div className="bridge-behavior-columns">
               <section className="bridge-panel bridge-behavior-panel">
                 <fieldset disabled={save.isPending}>
-                  {tab === "chat" ? (
-                    <>
-                      <h2>让它用你喜欢的方式说话。</h2>
-                      <p className="bridge-behavior-hint">
-                        与「回答风格」里的完整预设一起生效，下次回答开始使用。
-                      </p>
-                      <Choice
-                        label="语气"
-                        value={config.tone}
-                        onChange={(tone) => update({ tone })}
-                        options={[
-                          {
-                            value: "natural",
-                            title: "自然随和",
-                            detail: "少一点客服感",
-                          },
-                          {
-                            value: "warm",
-                            title: "温和耐心",
-                            detail: "多一点理解",
-                          },
-                          {
-                            value: "concise",
-                            title: "直接利落",
-                            detail: "先说重点",
-                          },
-                        ]}
-                      />
-                      <Choice
-                        label="回答长短"
-                        value={config.length}
-                        onChange={(length) => update({ length })}
-                        options={[
-                          {
-                            value: "short",
-                            title: "简短",
-                            detail: "日常一到三句",
-                          },
-                          {
-                            value: "balanced",
-                            title: "适中",
-                            detail: "按问题展开",
-                          },
-                          {
-                            value: "detailed",
-                            title: "详细",
-                            detail: "解释和例子",
-                          },
-                        ]}
-                      />
-                      <label className="bridge-field bridge-emoji-field">
-                        文字 Emoji
-                        <select
-                          value={config.emoji}
-                          onChange={(e) =>
-                            update({ emoji: e.target.value as Config["emoji"] })
-                          }
-                        >
-                          <option value="off">不使用</option>
-                          <option value="occasional">偶尔点缀</option>
-                          <option value="expressive">更有表情</option>
-                        </select>
-                      </label>
-                    </>
-                  ) : tab === "rhythm" ? (
+                  {tab === "rhythm" ? (
                     <>
                       <h2>像聊天一样，一句接一句。</h2>
                       <p className="bridge-behavior-hint">
@@ -383,57 +324,46 @@ export function BehaviorPage() {
                               ))}
                           </select>
                         </label>
+
                         <label className="bridge-field">
-                          接着问问题
+                          等你说完再回复
                           <select
-                            value={config.followUp}
+                            value={config.incoming.waitMs}
                             onChange={(e) =>
                               update({
-                                followUp: e.target.value as Config["followUp"],
+                                incoming: { waitMs: Number(e.target.value) },
                               })
                             }
                           >
-                            <option value="rare">少追问，允许自然结束</option>
-                            <option value="natural">
-                              顺着话题，偶尔问一句
-                            </option>
-                            <option value="curious">
-                              更好奇，但不连续盘问
-                            </option>
+                            {[
+                              ...new Set([
+                                0,
+                                3000,
+                                8000,
+                                12000,
+                                20000,
+                                30000,
+                                60000,
+                                config.incoming.waitMs,
+                              ]),
+                            ]
+                              .sort((a, b) => a - b)
+                              .map((n) => (
+                                <option key={n} value={n}>
+                                  {(
+                                    {
+                                      0: "立即处理 · 逐条回复",
+                                      3000: "停顿 3 秒再接话",
+                                      8000: "停顿 8 秒再接话",
+                                      12000: "停顿 12 秒再接话（默认）",
+                                      20000: "停顿 20 秒再接话",
+                                      30000: "停顿 30 秒再接话",
+                                      60000: "停顿 60 秒再接话",
+                                    } as Record<number, string>
+                                  )[n] ?? `停顿 ${n / 1000} 秒再接话`}
+                                </option>
+                              ))}
                           </select>
-                        </label>
-                        <label className="bridge-field bridge-field-full">
-                          括号动作与旁白
-                          <select
-                            value={config.actions}
-                            onChange={(e) =>
-                              update({
-                                actions: e.target.value as Config["actions"],
-                              })
-                            }
-                          >
-                            <option value="off">
-                              不用动作描写，像微信聊天
-                            </option>
-                            <option value="occasional">
-                              角色扮演时偶尔使用
-                            </option>
-                          </select>
-                        </label>
-                        <label className="bridge-field bridge-field-full">
-                          你喜欢的对话示例{" "}
-                          <span className="bridge-field-optional">可选</span>
-                          <textarea
-                            rows={2}
-                            maxLength={2000}
-                            value={config.examples}
-                            placeholder={
-                              "对方：今天累死了。\n回复：那今天先到这儿。好好歇一会儿。"
-                            }
-                            onChange={(e) =>
-                              update({ examples: e.target.value })
-                            }
-                          />
                         </label>
                       </div>
                     </>
@@ -453,6 +383,25 @@ export function BehaviorPage() {
                         />
                       </label>
                       <div className="bridge-proactive-fields">
+                        <label className="bridge-field bridge-field-full">
+                          从什么话题开口
+                          <select
+                            value={config.proactive.topicMode}
+                            onChange={(e) =>
+                              patchProactive({
+                                topicMode: e.target
+                                  .value as Config["proactive"]["topicMode"],
+                              })
+                            }
+                          >
+                            <option value="recent">
+                              接着近期话题，相关时参考已保存记忆
+                            </option>
+                            <option value="greeting">
+                              轻轻问候，不主动翻旧话题
+                            </option>
+                          </select>
+                        </label>
                         <label className="bridge-field">
                           安静多久后主动聊（分钟）
                           <input
@@ -572,61 +521,25 @@ export function BehaviorPage() {
                 </fieldset>
               </section>
               <aside className="bridge-behavior-aside">
-                {tab === "chat" ? (
-                  <>
-                    <div className="bridge-chat-recipes">
-                      <span className="bridge-eyebrow">MAKE IT YOURS</span>
-                      <h2>从一种相处方式开始。</h2>
-                      <p>选一个方案，微调后保存。</p>
-                      {chatRecipes.map((recipe) => {
-                        const active = Object.entries(recipe.settings).every(
-                          ([key, value]) =>
-                            JSON.stringify(config[key as keyof Config]) ===
-                            JSON.stringify(value),
-                        );
-                        return (
-                          <button
-                            key={recipe.id}
-                            type="button"
-                            aria-pressed={active}
-                            disabled={save.isPending}
-                            onClick={() => update(recipe.settings)}
-                          >
-                            <span>
-                              <strong>{recipe.name}</strong>
-                              {active ? (
-                                <Check size={14} />
-                              ) : (
-                                <ArrowUpRight size={14} />
-                              )}
-                            </span>
-                            <small>{recipe.detail}</small>
-                            <q>{recipe.sample}</q>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="bridge-behavior-hint">
-                      示例不会发送；实际表达由当前模型决定。方案保留预设与自写示例，主动聊天和表情需另行开启。
-                    </p>
-                  </>
-                ) : tab === "rhythm" ? (
+                {tab === "rhythm" ? (
                   <>
                     <div className="bridge-behavior-editorial bridge-rhythm-editorial">
                       <span className="bridge-eyebrow">ROOM TO BREATHE</span>
                       <MessagesSquare size={31} />
                       <h2>
-                        不用每句话，
+                        话可以分几条，
                         <br />
-                        都有一个问号。
+                        慢慢说完整。
                       </h2>
-                      <p>接住情绪、聊到哪儿算哪儿。需要帮忙时，再认真展开。</p>
+                      <p>补充一句，就重新等待。给你时间把话说完整。</p>
                     </div>
                     <p className="bridge-behavior-hint">
-                      示例会随聊天偏好发送给你配置的模型，用于学习表达方式，不作为共同记忆。适用于所有会话，请勿填写某个联系人的私密资料。
+                      篇幅、结构和当下语气会结合聊天内容调整。直接说“简单点”“展开讲讲”或“别分点”，无需来回修改设置。
                     </p>
                     <p className="bridge-behavior-hint">
-                      上下文沿用当前对话；新对话重新开始。本次不额外建立长期记忆。分条停顿不额外调用模型，暂停或发送失败会停止后续分条。
+                      收到最后一条后计时，还需模型生成时间。无法感知微信正在打字，连续文字最多等
+                      90
+                      秒。图片、引用、命令分开处理。长期记忆在「联系人与记忆」中由你填写，默认关闭。
                     </p>
                   </>
                 ) : (
@@ -712,41 +625,6 @@ export function BehaviorPage() {
         </>
       )}
     </div>
-  );
-}
-
-function Choice<T extends string>({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: T;
-  onChange: (value: T) => void;
-  options: { value: T; title: string; detail: string }[];
-}) {
-  return (
-    <fieldset className="bridge-behavior-choice">
-      <legend>{label}</legend>
-      <div>
-        {options.map((option) => (
-          <label
-            className={value === option.value ? "is-selected" : ""}
-            key={option.value}
-          >
-            <input
-              type="radio"
-              name={label}
-              checked={value === option.value}
-              onChange={() => onChange(option.value)}
-            />
-            <strong>{option.title}</strong>
-            <small>{option.detail}</small>
-          </label>
-        ))}
-      </div>
-    </fieldset>
   );
 }
 

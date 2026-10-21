@@ -990,54 +990,17 @@
                       ],
                       "default": "auto"
                     },
-                    "tone": {
-                      "type": "string",
-                      "enum": [
-                        "natural",
-                        "warm",
-                        "concise"
-                      ],
-                      "default": "natural"
-                    },
-                    "length": {
-                      "type": "string",
-                      "enum": [
-                        "short",
-                        "balanced",
-                        "detailed"
-                      ],
-                      "default": "balanced"
-                    },
-                    "emoji": {
-                      "type": "string",
-                      "enum": [
-                        "off",
-                        "occasional",
-                        "expressive"
-                      ],
-                      "default": "occasional"
-                    },
-                    "followUp": {
-                      "type": "string",
-                      "enum": [
-                        "rare",
-                        "natural",
-                        "curious"
-                      ],
-                      "default": "natural"
-                    },
-                    "actions": {
-                      "type": "string",
-                      "enum": [
-                        "off",
-                        "occasional"
-                      ],
-                      "default": "off"
-                    },
-                    "examples": {
-                      "type": "string",
-                      "maxLength": 2000,
-                      "default": ""
+                    "incoming": {
+                      "type": "object",
+                      "properties": {
+                        "waitMs": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 60000,
+                          "default": 12000
+                        }
+                      },
+                      "default": {}
                     },
                     "delivery": {
                       "type": "object",
@@ -1103,6 +1066,14 @@
                           },
                           "maxItems": 20,
                           "default": []
+                        },
+                        "topicMode": {
+                          "type": "string",
+                          "enum": [
+                            "recent",
+                            "greeting"
+                          ],
+                          "default": "recent"
                         },
                         "intervalMinutes": {
                           "type": "integer",
@@ -1186,54 +1157,17 @@
                     ],
                     "default": "auto"
                   },
-                  "tone": {
-                    "type": "string",
-                    "enum": [
-                      "natural",
-                      "warm",
-                      "concise"
-                    ],
-                    "default": "natural"
-                  },
-                  "length": {
-                    "type": "string",
-                    "enum": [
-                      "short",
-                      "balanced",
-                      "detailed"
-                    ],
-                    "default": "balanced"
-                  },
-                  "emoji": {
-                    "type": "string",
-                    "enum": [
-                      "off",
-                      "occasional",
-                      "expressive"
-                    ],
-                    "default": "occasional"
-                  },
-                  "followUp": {
-                    "type": "string",
-                    "enum": [
-                      "rare",
-                      "natural",
-                      "curious"
-                    ],
-                    "default": "natural"
-                  },
-                  "actions": {
-                    "type": "string",
-                    "enum": [
-                      "off",
-                      "occasional"
-                    ],
-                    "default": "off"
-                  },
-                  "examples": {
-                    "type": "string",
-                    "maxLength": 2000,
-                    "default": ""
+                  "incoming": {
+                    "type": "object",
+                    "properties": {
+                      "waitMs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 60000,
+                        "default": 12000
+                      }
+                    },
+                    "default": {}
                   },
                   "delivery": {
                     "type": "object",
@@ -1300,6 +1234,14 @@
                         "maxItems": 20,
                         "default": []
                       },
+                      "topicMode": {
+                        "type": "string",
+                        "enum": [
+                          "recent",
+                          "greeting"
+                        ],
+                        "default": "recent"
+                      },
                       "intervalMinutes": {
                         "type": "integer",
                         "minimum": 5,
@@ -1359,54 +1301,17 @@
                       ],
                       "default": "auto"
                     },
-                    "tone": {
-                      "type": "string",
-                      "enum": [
-                        "natural",
-                        "warm",
-                        "concise"
-                      ],
-                      "default": "natural"
-                    },
-                    "length": {
-                      "type": "string",
-                      "enum": [
-                        "short",
-                        "balanced",
-                        "detailed"
-                      ],
-                      "default": "balanced"
-                    },
-                    "emoji": {
-                      "type": "string",
-                      "enum": [
-                        "off",
-                        "occasional",
-                        "expressive"
-                      ],
-                      "default": "occasional"
-                    },
-                    "followUp": {
-                      "type": "string",
-                      "enum": [
-                        "rare",
-                        "natural",
-                        "curious"
-                      ],
-                      "default": "natural"
-                    },
-                    "actions": {
-                      "type": "string",
-                      "enum": [
-                        "off",
-                        "occasional"
-                      ],
-                      "default": "off"
-                    },
-                    "examples": {
-                      "type": "string",
-                      "maxLength": 2000,
-                      "default": ""
+                    "incoming": {
+                      "type": "object",
+                      "properties": {
+                        "waitMs": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 60000,
+                          "default": 12000
+                        }
+                      },
+                      "default": {}
                     },
                     "delivery": {
                       "type": "object",
@@ -1472,6 +1377,14 @@
                           },
                           "maxItems": 20,
                           "default": []
+                        },
+                        "topicMode": {
+                          "type": "string",
+                          "enum": [
+                            "recent",
+                            "greeting"
+                          ],
+                          "default": "recent"
                         },
                         "intervalMinutes": {
                           "type": "integer",
@@ -1822,6 +1735,8 @@
                               "limit",
                               "expired",
                               "generating",
+                              "resting",
+                              "contact-disabled",
                               "sent",
                               "error"
                             ]
@@ -1853,6 +1768,605 @@
                       "state"
                     ]
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bridge/contacts": {
+      "get": {
+        "tags": [
+          "Bridge"
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized conversations observed on this computer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "accountHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "lastSeen": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "memoryCount": {
+                        "type": "number"
+                      },
+                      "memoryEnabled": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "accountHash",
+                      "lastSeen",
+                      "label",
+                      "memoryCount",
+                      "memoryEnabled"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Contact unavailable or stale edit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bridge/contacts/{id}": {
+      "get": {
+        "tags": [
+          "Bridge"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Local contact preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revision": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "settings": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "maxLength": 40,
+                          "default": ""
+                        },
+                        "nickname": {
+                          "type": "string",
+                          "maxLength": 40,
+                          "default": ""
+                        },
+                        "relationship": {
+                          "type": "string",
+                          "maxLength": 200,
+                          "default": ""
+                        },
+                        "instructions": {
+                          "type": "string",
+                          "maxLength": 2000,
+                          "default": ""
+                        },
+                        "memoryEnabled": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "memories": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 300
+                          },
+                          "maxItems": 20,
+                          "default": []
+                        },
+                        "proactive": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "off"
+                          ],
+                          "default": "inherit"
+                        },
+                        "topicMode": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "recent",
+                            "greeting"
+                          ],
+                          "default": "inherit"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "revision",
+                    "settings"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Contact unavailable or stale edit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Contact unavailable or stale edit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Contact unavailable or stale edit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Bridge"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "revision": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "settings": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "maxLength": 40,
+                        "default": ""
+                      },
+                      "nickname": {
+                        "type": "string",
+                        "maxLength": 40,
+                        "default": ""
+                      },
+                      "relationship": {
+                        "type": "string",
+                        "maxLength": 200,
+                        "default": ""
+                      },
+                      "instructions": {
+                        "type": "string",
+                        "maxLength": 2000,
+                        "default": ""
+                      },
+                      "memoryEnabled": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "memories": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 300
+                        },
+                        "maxItems": 20,
+                        "default": []
+                      },
+                      "proactive": {
+                        "type": "string",
+                        "enum": [
+                          "inherit",
+                          "off"
+                        ],
+                        "default": "inherit"
+                      },
+                      "topicMode": {
+                        "type": "string",
+                        "enum": [
+                          "inherit",
+                          "recent",
+                          "greeting"
+                        ],
+                        "default": "inherit"
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "revision",
+                  "settings"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Local contact preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revision": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "settings": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "maxLength": 40,
+                          "default": ""
+                        },
+                        "nickname": {
+                          "type": "string",
+                          "maxLength": 40,
+                          "default": ""
+                        },
+                        "relationship": {
+                          "type": "string",
+                          "maxLength": 200,
+                          "default": ""
+                        },
+                        "instructions": {
+                          "type": "string",
+                          "maxLength": 2000,
+                          "default": ""
+                        },
+                        "memoryEnabled": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "memories": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 300
+                          },
+                          "maxItems": 20,
+                          "default": []
+                        },
+                        "proactive": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "off"
+                          ],
+                          "default": "inherit"
+                        },
+                        "topicMode": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "recent",
+                            "greeting"
+                          ],
+                          "default": "inherit"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "revision",
+                    "settings"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Contact unavailable or stale edit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Contact unavailable or stale edit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Contact unavailable or stale edit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bridge/contacts/{id}/memories": {
+      "delete": {
+        "tags": [
+          "Bridge"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Local contact preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revision": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "settings": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "maxLength": 40,
+                          "default": ""
+                        },
+                        "nickname": {
+                          "type": "string",
+                          "maxLength": 40,
+                          "default": ""
+                        },
+                        "relationship": {
+                          "type": "string",
+                          "maxLength": 200,
+                          "default": ""
+                        },
+                        "instructions": {
+                          "type": "string",
+                          "maxLength": 2000,
+                          "default": ""
+                        },
+                        "memoryEnabled": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "memories": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 300
+                          },
+                          "maxItems": 20,
+                          "default": []
+                        },
+                        "proactive": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "off"
+                          ],
+                          "default": "inherit"
+                        },
+                        "topicMode": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "recent",
+                            "greeting"
+                          ],
+                          "default": "inherit"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "revision",
+                    "settings"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Contact unavailable or stale edit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Contact unavailable or stale edit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Contact unavailable or stale edit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
                 }
               }
             }

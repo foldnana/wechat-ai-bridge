@@ -38,6 +38,7 @@ import { sendWeixinMediaFile } from "./send-media.js";
 import { markdownToPlainText, sendMessageWeixin } from "./send.js";
 import { handleSlashCommand } from "./slash-commands.js";
 import { replyBubbles, sendReplyBubbles } from "./bridge-reply-rhythm.js";
+import { contactPrompt, loadContact, observeContact } from "../storage/bridge-contacts.js";
 
 const MEDIA_OUTBOUND_TEMP_DIR = path.join(
   resolvePreferredOpenClawTmpDir(),
@@ -58,6 +59,7 @@ export type ProcessMessageDeps = {
   onAuthorized?: (message: WeixinMessage) => void;
   proactiveValid?: () => boolean;
   abortSignal?: AbortSignal;
+  replyValid?: () => boolean;
 };
 
 /** Extract text body from item_list (for slash command detection). */
@@ -83,7 +85,7 @@ export async function processOneMessage(
 ): Promise<boolean> {
   // Messages received while paused are intentionally ignored, not queued.
   if (
-    deps.abortSignal?.aborted || bridgeRepliesPaused() ||
+    deps.abortSignal?.aborted || bridgeRepliesPaused() || (deps.replyValid && !deps.replyValid()) ||
     (deps.proactiveValid && !deps.proactiveValid())
   )
     return false;
@@ -234,6 +236,13 @@ export async function processOneMessage(
   }
 
   ctx.CommandAuthorized = commandAuthorized;
+  const contact = loadContact(deps.accountId, senderId);
+  ctx.GroupSystemPrompt = contactPrompt(contact);
+  const contactUnchanged = () => loadContact(deps.accountId, senderId)?.revision === contact?.revision;
+  if (!deps.proactiveValid) {
+    try { observeContact(deps.accountId, senderId); }
+    catch { deps.errLog("Cannot update local contact index"); }
+  }
   if (!deps.proactiveValid) deps.onAuthorized?.(full);
   const bridgeActivity = beginBridgeActivity(
     deps.accountId,
@@ -365,7 +374,7 @@ export async function processOneMessage(
       humanDelay,
       typingCallbacks,
       deliver: async (payload) => {
-        if (deps.abortSignal?.aborted || bridgeRepliesPaused()) return;
+        if (deps.abortSignal?.aborted || bridgeRepliesPaused() || !contactUnchanged() || (deps.replyValid && !deps.replyValid())) return;
         if (deps.proactiveValid && (!deps.proactiveValid() || payload.isError))
           return;
         const text = markdownToPlainText(
@@ -448,6 +457,8 @@ export async function processOneMessage(
               }
               return;
             }
+            if (deps.abortSignal?.aborted || bridgeRepliesPaused() || !contactUnchanged() ||
+              (deps.replyValid && !deps.replyValid()) || (deps.proactiveValid && !deps.proactiveValid())) return;
             await sendWeixinMediaFile({
               filePath,
               to: ctx.To,
@@ -469,7 +480,7 @@ export async function processOneMessage(
                 text: bubble,
                 opts: { baseUrl: deps.baseUrl, token: deps.token, contextToken },
               }),
-              () => !bridgeRepliesPaused() &&
+              () => contactUnchanged() && !bridgeRepliesPaused() && (!deps.replyValid || deps.replyValid()) &&
                 (!deps.proactiveValid || deps.proactiveValid()),
               deps.abortSignal,
             );
@@ -482,6 +493,8 @@ export async function processOneMessage(
           if (
             sticker &&
             !deps.abortSignal?.aborted &&
+            contactUnchanged() &&
+            (!deps.replyValid || deps.replyValid()) &&
             !bridgeRepliesPaused() &&
             (!deps.proactiveValid || deps.proactiveValid())
           ) {
@@ -507,7 +520,8 @@ export async function processOneMessage(
       },
       onError: (err, info) => {
         bridgeActivity.failed("generation");
-        if (deps.proactiveValid) return;
+        if (deps.proactiveValid || deps.abortSignal?.aborted || bridgeRepliesPaused() ||
+          !contactUnchanged() || (deps.replyValid && !deps.replyValid())) return;
         deps.errLog(`weixin reply ${info.kind}: ${String(err)}`);
         const errMsg = err instanceof Error ? err.message : String(err);
         let notice: string;

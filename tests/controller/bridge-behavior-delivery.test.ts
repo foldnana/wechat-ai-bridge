@@ -8,15 +8,21 @@ import {
   writeBridgeJson,
 } from "#controller/services/bridge-behavior";
 import {
+  contactSettingsSchema,
+  saveContactProfile,
+} from "#controller/services/bridge-contacts";
+import {
   type ProcessMessageDeps,
   processOneMessage,
 } from "../../apps/controller/static/runtime-plugins/openclaw-weixin/src/messaging/process-message";
+import { bridgeHash } from "../../apps/controller/static/runtime-plugins/openclaw-weixin/src/storage/bridge-behavior";
 
 const calls = vi.hoisted(() => ({
   text: vi.fn(),
   media: vi.fn(),
   notice: vi.fn(),
   authorized: true,
+  context: vi.fn(),
 }));
 vi.mock("openclaw/plugin-sdk", () => ({
   createTypingCallbacks: () => ({}),
@@ -114,7 +120,10 @@ async function harness(text: string, beforeDelivery = () => {}) {
         recordInboundSession: vi.fn(),
       },
       reply: {
-        finalizeInboundContext: (ctx: unknown) => ctx,
+        finalizeInboundContext: (ctx: unknown) => {
+          calls.context(ctx);
+          return ctx;
+        },
         resolveHumanDelayConfig: () => ({}),
         createReplyDispatcherWithTyping: (options: {
           deliver: typeof deliver;
@@ -143,6 +152,52 @@ async function harness(text: string, beforeDelivery = () => {}) {
   return { root, deps, full };
 }
 describe("behavior settings in the actual reply delivery path", () => {
+  it("cancels remaining bubbles if contact memories are cleared during a reply", async () => {
+    const f = await harness("终于可以喘一口气了。今天真的辛苦你啦！");
+    const id = bridgeHash(`${f.deps.accountId}\0test-peer`);
+    await saveContactProfile(
+      f.root,
+      id,
+      contactSettingsSchema.parse({
+        memoryEnabled: true,
+        memories: ["以前的备忘"],
+      }),
+    );
+    await writeBridgeJson(f.root, "bridge-behavior.json", {
+      ...behaviorSchema.parse({ delivery: { mode: "natural", pauseMs: 500 } }),
+      accountHashes: [],
+    });
+    calls.text.mockImplementationOnce(async () => {
+      await saveContactProfile(f.root, id, contactSettingsSchema.parse({}));
+    });
+    expect(await processOneMessage(f.full, f.deps)).toBe(false);
+    expect(calls.text).toHaveBeenCalledTimes(1);
+  });
+  it("injects only the current contact's enabled notes as system context, not user messages", async () => {
+    const f = await harness("回复");
+    await saveContactProfile(
+      f.root,
+      bridgeHash(`${f.deps.accountId}\0test-peer`),
+      contactSettingsSchema.parse({
+        nickname: "小明",
+        memoryEnabled: true,
+        memories: ["不喜欢剧透"],
+      }),
+    );
+    await saveContactProfile(
+      f.root,
+      bridgeHash(`${f.deps.accountId}\0other-peer`),
+      contactSettingsSchema.parse({
+        memoryEnabled: true,
+        memories: ["另一个人的资料"],
+      }),
+    );
+    await processOneMessage(f.full, f.deps);
+    const ctx = calls.context.mock.calls[0]?.[0];
+    expect(ctx.GroupSystemPrompt).toContain("不喜欢剧透");
+    expect(ctx.GroupSystemPrompt).not.toContain("另一个人的资料");
+    expect(ctx.Body).toBe("你好");
+  });
   it("uses saved rhythm in real delivery and keeps the same context for every bubble", async () => {
     const text = "终于可以喘一口气了。今天真的辛苦你啦！";
     const f = await harness(text);

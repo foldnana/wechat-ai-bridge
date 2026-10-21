@@ -6,11 +6,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ControllerContainer } from "#controller/app/container";
 import { createApp } from "#controller/app/create-app";
 import {
-  behaviorPrompt,
   behaviorSchema,
   decodeSticker,
   writeBridgeJson,
 } from "#controller/services/bridge-behavior";
+import {
+  contactSettingsSchema,
+  saveContactProfile,
+} from "#controller/services/bridge-contacts";
 import { BridgeProactive } from "../../apps/controller/static/runtime-plugins/openclaw-weixin/src/messaging/bridge-proactive";
 import {
   bridgeHash,
@@ -56,30 +59,25 @@ async function setup() {
   return { root, account, config, scheduler, inbound, advance, now: () => now };
 }
 describe("behavior preferences and managed sticker library", () => {
-  it("validates conversational preferences and makes examples guidance, not shared memories", () => {
+  it("ignores retired expression controls while keeping actual delivery settings bounded", () => {
     const config = behaviorSchema.parse({
       followUp: "rare",
       examples: "对方：晚安。回复：明天见。",
       delivery: { mode: "natural" },
     });
-    const prompt = behaviorPrompt(config, []);
-    expect(prompt).toContain(config.examples);
-    expect(prompt).toContain("通常不在结尾追问");
-    expect(prompt).toContain("不是对方的经历或记忆");
-    expect(prompt).toContain("被问及时如实说明");
+    expect(config).not.toHaveProperty("followUp");
+    expect(config).not.toHaveProperty("examples");
     expect(behaviorSchema.safeParse({ delivery: { pauseMs: 0 } }).success).toBe(
       false,
     );
     expect(
       behaviorSchema.safeParse({ delivery: { maxBubbles: 4 } }).success,
     ).toBe(false);
-    expect(
-      behaviorSchema.safeParse({ examples: "x".repeat(2001) }).success,
-    ).toBe(false);
   });
   it("defaults to no stickers and no proactive messages, with bounded settings", () => {
     expect(behaviorSchema.parse({})).toMatchObject({
       persona: "auto",
+      incoming: { waitMs: 12000 },
       stickers: { enabled: false },
       proactive: { enabled: false },
     });
@@ -121,6 +119,8 @@ describe("behavior preferences and managed sticker library", () => {
       (
         await put({
           tone: "warm",
+          responseIntent: "listen", // Legacy clients cannot lock a conversation into a mode.
+          incoming: { waitMs: 20000 },
           persona: "none",
           followUp: "rare",
           examples: "对方：忙完了。回复：先歇会儿。",
@@ -130,6 +130,7 @@ describe("behavior preferences and managed sticker library", () => {
       ).status,
     ).toBe(200);
     expect(loadBehavior()?.accountHashes).toEqual([bridgeHash(account)]);
+    expect(loadBehavior()?.incoming.waitMs).toBe(20000);
     expect(loadBehavior()?.delivery).toEqual({
       mode: "natural",
       maxBubbles: 3,
@@ -138,21 +139,33 @@ describe("behavior preferences and managed sticker library", () => {
     const saved = JSON.parse(
       await readFile(path.join(root, "bridge-behavior.json"), "utf8"),
     );
-    expect(saved.promptContext).toContain("温和、耐心");
+    for (const field of [
+      "responseIntent",
+      "tone",
+      "followUp",
+      "examples",
+      "promptContext",
+    ])
+      expect(saved).not.toHaveProperty(field);
     expect(saved.persona).toBe("none");
     const roundTrip = await (
       await app.request("/api/v1/bridge/behavior")
     ).json();
     expect(roundTrip).toMatchObject({
-      followUp: "rare",
-      examples: "对方：忙完了。回复：先歇会儿。",
+      incoming: { waitMs: 20000 },
       delivery: { mode: "natural", maxBubbles: 3, pauseMs: 1800 },
     });
-    expect(saved.promptContext).toContain(roundTrip.examples);
+    for (const field of [
+      "responseIntent",
+      "tone",
+      "followUp",
+      "examples",
+      "promptContext",
+    ])
+      expect(roundTrip).not.toHaveProperty(field);
     expect(
       (await (await app.request("/api/v1/bridge/behavior")).json()).persona,
     ).toBe("none");
-    expect(saved.promptContext).not.toContain(account);
     expect(
       (await (await app.request("/api/v1/bridge/behavior")).json())
         .accountHashes,
@@ -225,16 +238,64 @@ describe("behavior preferences and managed sticker library", () => {
     await writeFile(path.join(root, "bridge-behavior.json"), "{bad");
     expect(loadBehavior()).toBeNull();
   });
-  it("does not advertise sticker selection when the feature is disabled", () => {
-    const config = behaviorSchema.parse({});
-    expect(
-      behaviorPrompt(config, [
-        { id: randomUUID(), label: "私有标签", tags: "开心", extension: "png" },
-      ]),
-    ).not.toContain("私有标签");
-  });
 });
 describe("opt-in proactive scheduling", () => {
+  it("uses a recent topic and time, cancels on fresh inbound, and respects per-contact opt-out", async () => {
+    const f = await setup();
+    f.scheduler.observe({
+      ...f.inbound,
+      item_list: [{ type: 1, text_item: { text: "明天有面试" } }],
+    });
+    f.advance();
+    const send = vi.fn(async (message, valid) => {
+      expect(message.item_list[0].text_item.text).toContain("明天有面试");
+      expect(message.item_list[0].text_item.text).toContain("上次收到消息");
+      f.scheduler.invalidate(f.inbound.from_user_id);
+      expect(valid()).toBe(false);
+      return false;
+    });
+    await f.scheduler.tick(send);
+    const id = bridgeHash(`${f.account}\0${f.inbound.from_user_id}`);
+    await saveContactProfile(
+      f.root,
+      id,
+      contactSettingsSchema.parse({ proactive: "off" }),
+    );
+    f.scheduler.observe(f.inbound);
+    f.advance();
+    await f.scheduler.tick(send);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+  it("waits after goodnight and leaves the previous topic out in greeting mode", async () => {
+    const f = await setup();
+    f.scheduler.observe({
+      ...f.inbound,
+      item_list: [{ type: 1, text_item: { text: "晚安，先睡了" } }],
+    });
+    f.advance();
+    const send = vi.fn().mockResolvedValue(true);
+    await f.scheduler.tick(send);
+    expect(send).not.toHaveBeenCalled();
+    const id = bridgeHash(`${f.account}\0${f.inbound.from_user_id}`);
+    await saveContactProfile(
+      f.root,
+      id,
+      contactSettingsSchema.parse({ topicMode: "greeting" }),
+    );
+    f.scheduler.observe({
+      ...f.inbound,
+      item_list: [{ type: 1, text_item: { text: "不应被翻出的私密话题" } }],
+    });
+    f.advance();
+    await f.scheduler.tick(send);
+    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls[0]?.[0].item_list[0].text_item.text).not.toContain(
+      "不应被翻出的私密话题",
+    );
+    expect(send.mock.calls[0]?.[0].item_list[0].text_item.text).toContain(
+      "轻量问候",
+    );
+  });
   it("waits for a quiet interval after the ordinary reply finishes", async () => {
     const f = await setup();
     const send = vi.fn().mockResolvedValue(true);

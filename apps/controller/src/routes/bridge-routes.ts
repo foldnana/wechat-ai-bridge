@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { type OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
@@ -81,7 +81,11 @@ export function registerBridgeRoutes(
       const body = c.req.valid("json");
       await mkdir(path.dirname(pauseFile), { recursive: true });
       const temp = `${pauseFile}.${c.get("requestId")}.tmp`;
-      await writeFile(temp, JSON.stringify(body), { mode: 0o600 });
+      await writeFile(
+        temp,
+        JSON.stringify({ ...body, revision: randomUUID() }),
+        { mode: 0o600 },
+      );
       await rename(temp, pauseFile);
       return c.json(body, 200);
     },

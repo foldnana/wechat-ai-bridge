@@ -5,7 +5,6 @@ import { type OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { bodyLimit } from "hono/body-limit";
 import type { ControllerContainer } from "../app/container.js";
 import {
-  behaviorPrompt,
   behaviorSchema,
   decodeSticker,
   readBehavior,
@@ -39,7 +38,6 @@ export function registerBridgeBehaviorRoutes(
       accountHashes: targets.map((ch) =>
         createHash("sha256").update(ch.accountId).digest("hex"),
       ),
-      promptContext: behaviorPrompt(config, await readStickers(root)),
     });
   }
   const errorResponse = {
@@ -210,6 +208,8 @@ export function registerBridgeBehaviorRoutes(
       "limit",
       "expired",
       "generating",
+      "resting",
+      "contact-disabled",
       "sent",
       "error",
     ]),

@@ -4,6 +4,7 @@ import { WorkspaceLayout } from "./layouts/workspace-layout";
 import { ActivityPage } from "./pages/activity";
 import { BehaviorPage } from "./pages/behavior";
 import { BridgeSettingsPage } from "./pages/bridge-settings";
+import { ContactsPage } from "./pages/contacts";
 import { HomePage } from "./pages/home";
 import { WechatPage } from "./pages/wechat";
 const ModelsPage = lazy(() =>
@@ -42,6 +43,7 @@ export function App() {
         />
         <Route path="/workspace/activity" element={<ActivityPage />} />
         <Route path="/workspace/behavior" element={<BehaviorPage />} />
+        <Route path="/workspace/behavior/contacts" element={<ContactsPage />} />
         <Route
           path="/workspace/models/advanced"
           element={

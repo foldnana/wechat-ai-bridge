@@ -82,6 +82,12 @@ function createBaseConfig(): NexuConfig {
 }
 
 describe("compileOpenClawConfig", () => {
+  it("isolates conversation context by account, channel and peer", () => {
+    const compiled = compileOpenClawConfig(createBaseConfig(), createEnv());
+    expect(compiled.session).toMatchObject({
+      dmScope: "per-account-channel-peer",
+    });
+  });
   it("keeps openclaw-weixin plugin entry stable when a wechat channel exists", () => {
     const config = createBaseConfig();
     config.channels = [

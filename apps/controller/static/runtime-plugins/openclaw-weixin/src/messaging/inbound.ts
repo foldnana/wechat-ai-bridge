@@ -73,6 +73,8 @@ export type WeixinMsgContext = {
   CommandBody?: string;
   /** Whether the sender is authorized to execute slash commands. */
   CommandAuthorized?: boolean;
+  /** Local, per-contact preferences injected only for this generation. */
+  GroupSystemPrompt?: string;
 };
 
 /** Returns true if the message item is a media type (image, video, file, or voice). */

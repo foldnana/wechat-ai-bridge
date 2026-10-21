@@ -12,6 +12,12 @@ import {
 } from "../api/session-guard.js";
 import { processOneMessage } from "../messaging/process-message.js";
 import { BridgeProactive } from "../messaging/bridge-proactive.js";
+import { BridgeInbox } from "../messaging/bridge-inbox.js";
+import { loadBehavior } from "../storage/bridge-behavior.js";
+import {
+  bridgeControlVersion,
+  bridgeRepliesPaused,
+} from "../storage/bridge-control.js";
 import { waitForWeixinRuntime } from "../runtime.js";
 import {
   getSyncBufFilePath,
@@ -105,87 +111,188 @@ export async function monitorWeixinProvider(
 
   const configManager = new WeixinConfigManager({ baseUrl, token }, log);
   const proactive = new BridgeProactive(accountId);
+  const inbox = new BridgeInbox({
+    waitMs: () => loadBehavior()?.incoming.waitMs ?? 12000,
+    version: bridgeControlVersion,
+    paused: () => bridgeRepliesPaused() || getRemainingPauseMs(accountId) > 0,
+    error: () =>
+      errLog("WeChat reply processing failed; check the local activity page"),
+    run: async (full, valid) => {
+      const cachedConfig = await configManager.getForUser(
+        full.from_user_id ?? "",
+        full.context_token,
+      );
+      const delivered = await processOneMessage(full, {
+        abortSignal,
+        accountId,
+        config,
+        channelRuntime,
+        baseUrl,
+        cdnBaseUrl,
+        token,
+        typingTicket: cachedConfig.typingTicket,
+        log,
+        errLog,
+        replyValid: valid,
+        onAuthorized: (message) => proactive.observe(message),
+      });
+      if (delivered) proactive.replied(full);
+    },
+  });
+  const stopInbox = () => inbox.close();
+  abortSignal?.addEventListener("abort", stopInbox, { once: true });
 
   let normalTimeoutMs = longPollTimeoutMs ?? DEFAULT_LONG_POLL_TIMEOUT_MS;
   let nextTimeoutMs = INITIAL_POLL_TIMEOUT_MS;
   let initialPollsRemaining = INITIAL_POLL_COUNT;
   let consecutiveFailures = 0;
 
-  while (!abortSignal?.aborted) {
-    try {
-      aLog.debug(
-        `getUpdates: get_updates_buf=${getUpdatesBuf.substring(0, 50)}..., timeoutMs=${nextTimeoutMs}`,
-      );
-      const resp = await getUpdates({
-        baseUrl,
-        token,
-        get_updates_buf: getUpdatesBuf,
-        timeoutMs: nextTimeoutMs,
-      });
-      aLog.debug(
-        `getUpdates response: ret=${resp.ret}, msgs=${resp.msgs?.length ?? 0}, get_updates_buf_length=${resp.get_updates_buf?.length ?? 0}`,
-      );
+  try {
+    while (!abortSignal?.aborted) {
+      try {
+        aLog.debug(
+          `getUpdates: get_updates_buf=${getUpdatesBuf.substring(0, 50)}..., timeoutMs=${nextTimeoutMs}`,
+        );
+        const resp = await getUpdates({
+          baseUrl,
+          token,
+          get_updates_buf: getUpdatesBuf,
+          timeoutMs: nextTimeoutMs,
+        });
+        aLog.debug(
+          `getUpdates response: ret=${resp.ret}, msgs=${resp.msgs?.length ?? 0}, get_updates_buf_length=${resp.get_updates_buf?.length ?? 0}`,
+        );
 
-      if (
-        resp.longpolling_timeout_ms != null &&
-        resp.longpolling_timeout_ms > 0
-      ) {
-        // Server-suggested timeout overrides both initial and normal timeouts.
-        if (normalTimeoutMs !== resp.longpolling_timeout_ms) {
-          aLog.debug(
-            `Server poll timeout updated: ${resp.longpolling_timeout_ms}ms`,
-          );
-          normalTimeoutMs = resp.longpolling_timeout_ms;
+        if (
+          resp.longpolling_timeout_ms != null &&
+          resp.longpolling_timeout_ms > 0
+        ) {
+          // Server-suggested timeout overrides both initial and normal timeouts.
+          if (normalTimeoutMs !== resp.longpolling_timeout_ms) {
+            aLog.debug(
+              `Server poll timeout updated: ${resp.longpolling_timeout_ms}ms`,
+            );
+            normalTimeoutMs = resp.longpolling_timeout_ms;
+          }
+          nextTimeoutMs = resp.longpolling_timeout_ms;
+          initialPollsRemaining = 0;
+        } else if (initialPollsRemaining > 0) {
+          initialPollsRemaining -= 1;
+          if (initialPollsRemaining <= 0) {
+            nextTimeoutMs = normalTimeoutMs;
+            aLog.info(
+              `Initial short-poll phase complete, switching to ${normalTimeoutMs}ms`,
+            );
+          }
         }
-        nextTimeoutMs = resp.longpolling_timeout_ms;
-        initialPollsRemaining = 0;
-      } else if (initialPollsRemaining > 0) {
-        initialPollsRemaining -= 1;
-        if (initialPollsRemaining <= 0) {
-          nextTimeoutMs = normalTimeoutMs;
-          aLog.info(
-            `Initial short-poll phase complete, switching to ${normalTimeoutMs}ms`,
-          );
-        }
-      }
-      const isApiError =
-        (resp.ret !== undefined && resp.ret !== 0) ||
-        (resp.errcode !== undefined && resp.errcode !== 0);
-      if (isApiError) {
-        const isSessionExpired =
-          resp.errcode === SESSION_EXPIRED_ERRCODE ||
-          resp.ret === SESSION_EXPIRED_ERRCODE;
+        const isApiError =
+          (resp.ret !== undefined && resp.ret !== 0) ||
+          (resp.errcode !== undefined && resp.errcode !== 0);
+        if (isApiError) {
+          const isSessionExpired =
+            resp.errcode === SESSION_EXPIRED_ERRCODE ||
+            resp.ret === SESSION_EXPIRED_ERRCODE;
 
-        if (isSessionExpired) {
-          pauseSession(accountId);
-          const pauseMs = getRemainingPauseMs(accountId);
+          if (isSessionExpired) {
+            pauseSession(accountId);
+            proactive.suspend();
+            const pauseMs = getRemainingPauseMs(accountId);
+            errLog(
+              `weixin getUpdates: session expired (errcode ${SESSION_EXPIRED_ERRCODE}), pausing bot for ${Math.ceil(pauseMs / 60_000)} min`,
+            );
+            aLog.error(
+              `getUpdates: session expired (errcode=${resp.errcode} ret=${resp.ret}), pausing all requests for ${Math.ceil(pauseMs / 60_000)} min`,
+            );
+            // Surface the error to the runtime snapshot so live-status
+            // reports "error / session expired" instead of "connected"
+            // while the monitor is paused.
+            setStatus?.({
+              accountId,
+              running: false,
+              lastError: "not configured",
+            });
+            consecutiveFailures = 0;
+            await sleep(pauseMs, abortSignal);
+            // Clear error when resuming so the monitor can retry.
+            setStatus?.({ accountId, running: true, lastError: null });
+            continue;
+          }
+
+          consecutiveFailures += 1;
           errLog(
-            `weixin getUpdates: session expired (errcode ${SESSION_EXPIRED_ERRCODE}), pausing bot for ${Math.ceil(pauseMs / 60_000)} min`,
+            `weixin getUpdates failed: ret=${resp.ret} errcode=${resp.errcode} errmsg=${resp.errmsg ?? ""} (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`,
           );
           aLog.error(
-            `getUpdates: session expired (errcode=${resp.errcode} ret=${resp.ret}), pausing all requests for ${Math.ceil(pauseMs / 60_000)} min`,
+            `getUpdates failed: ret=${resp.ret} errcode=${resp.errcode} errmsg=${resp.errmsg} response=${redactBody(JSON.stringify(resp))}`,
           );
-          // Surface the error to the runtime snapshot so live-status
-          // reports "error / session expired" instead of "connected"
-          // while the monitor is paused.
-          setStatus?.({
-            accountId,
-            running: false,
-            lastError: "not configured",
-          });
-          consecutiveFailures = 0;
-          await sleep(pauseMs, abortSignal);
-          // Clear error when resuming so the monitor can retry.
-          setStatus?.({ accountId, running: true, lastError: null });
+          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            errLog(
+              `weixin getUpdates: ${MAX_CONSECUTIVE_FAILURES} consecutive failures, backing off 30s`,
+            );
+            aLog.error(
+              `getUpdates: ${MAX_CONSECUTIVE_FAILURES} consecutive failures, backing off 30s`,
+            );
+            consecutiveFailures = 0;
+            await sleep(BACKOFF_DELAY_MS, abortSignal);
+          } else {
+            await sleep(RETRY_DELAY_MS, abortSignal);
+          }
           continue;
         }
+        consecutiveFailures = 0;
+        setStatus?.({ accountId, lastEventAt: Date.now() });
+        if (resp.get_updates_buf != null && resp.get_updates_buf !== "") {
+          saveGetUpdatesBuf(syncFilePath, resp.get_updates_buf);
+          getUpdatesBuf = resp.get_updates_buf;
+          aLog.debug(
+            `Saved new get_updates_buf (${getUpdatesBuf.length} bytes)`,
+          );
+        }
+        const list = resp.msgs ?? [];
+        for (const full of list) {
+          aLog.info(
+            `inbound message: from=${full.from_user_id} types=${full.item_list?.map((i) => i.type).join(",") ?? "none"}`,
+          );
 
+          const now = Date.now();
+          setStatus?.({ accountId, lastEventAt: now, lastInboundAt: now });
+
+          // allowFrom filtering is delegated to processOneMessage via the framework
+          // authorization pipeline (resolveSenderCommandAuthorizationWithRuntime).
+
+          proactive.invalidate(full.from_user_id ?? "");
+          await inbox.add(full);
+        }
+        // Narrow, opt-in chat scheduler. OpenClaw cron and arbitrary tools stay disabled.
+        void inbox.runWhenIdle(() =>
+          proactive.tick(
+            (message, valid) =>
+              processOneMessage(message, {
+                abortSignal,
+                accountId,
+                config,
+                channelRuntime,
+                baseUrl,
+                cdnBaseUrl,
+                token,
+                log,
+                errLog,
+                proactiveValid: valid,
+              }),
+            abortSignal,
+          ),
+        );
+      } catch (err) {
+        if (abortSignal?.aborted) {
+          aLog.info(`Monitor stopped (aborted)`);
+          return;
+        }
         consecutiveFailures += 1;
         errLog(
-          `weixin getUpdates failed: ret=${resp.ret} errcode=${resp.errcode} errmsg=${resp.errmsg ?? ""} (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`,
+          `weixin getUpdates error (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}): ${String(err)}`,
         );
         aLog.error(
-          `getUpdates failed: ret=${resp.ret} errcode=${resp.errcode} errmsg=${resp.errmsg} response=${redactBody(JSON.stringify(resp))}`,
+          `getUpdates error: ${String(err)}, stack=${(err as Error).stack}`,
         );
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
           errLog(
@@ -195,94 +302,17 @@ export async function monitorWeixinProvider(
             `getUpdates: ${MAX_CONSECUTIVE_FAILURES} consecutive failures, backing off 30s`,
           );
           consecutiveFailures = 0;
-          await sleep(BACKOFF_DELAY_MS, abortSignal);
+          await sleep(30_000, abortSignal);
         } else {
-          await sleep(RETRY_DELAY_MS, abortSignal);
+          await sleep(2000, abortSignal);
         }
-        continue;
-      }
-      consecutiveFailures = 0;
-      setStatus?.({ accountId, lastEventAt: Date.now() });
-      if (resp.get_updates_buf != null && resp.get_updates_buf !== "") {
-        saveGetUpdatesBuf(syncFilePath, resp.get_updates_buf);
-        getUpdatesBuf = resp.get_updates_buf;
-        aLog.debug(`Saved new get_updates_buf (${getUpdatesBuf.length} bytes)`);
-      }
-      const list = resp.msgs ?? [];
-      for (const full of list) {
-        aLog.info(
-          `inbound message: from=${full.from_user_id} types=${full.item_list?.map((i) => i.type).join(",") ?? "none"}`,
-        );
-
-        const now = Date.now();
-        setStatus?.({ accountId, lastEventAt: now, lastInboundAt: now });
-
-        // allowFrom filtering is delegated to processOneMessage via the framework
-        // authorization pipeline (resolveSenderCommandAuthorizationWithRuntime).
-
-        const fromUserId = full.from_user_id ?? "";
-        const cachedConfig = await configManager.getForUser(
-          fromUserId,
-          full.context_token,
-        );
-
-        const delivered = await processOneMessage(full, {
-          abortSignal,
-          accountId,
-          config,
-          channelRuntime,
-          baseUrl,
-          cdnBaseUrl,
-          token,
-          typingTicket: cachedConfig.typingTicket,
-          log: opts.runtime?.log ?? (() => {}),
-          errLog,
-          onAuthorized: (message) => proactive.observe(message),
-        });
-        if (delivered) proactive.replied(full);
-      }
-      // Narrow, opt-in chat scheduler. OpenClaw cron and arbitrary tools stay disabled.
-      await proactive.tick(
-        (message, valid) =>
-          processOneMessage(message, {
-            abortSignal,
-            accountId,
-            config,
-            channelRuntime,
-            baseUrl,
-            cdnBaseUrl,
-            token,
-            log,
-            errLog,
-            proactiveValid: valid,
-          }),
-        abortSignal,
-      );
-    } catch (err) {
-      if (abortSignal?.aborted) {
-        aLog.info(`Monitor stopped (aborted)`);
-        return;
-      }
-      consecutiveFailures += 1;
-      errLog(
-        `weixin getUpdates error (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}): ${String(err)}`,
-      );
-      aLog.error(
-        `getUpdates error: ${String(err)}, stack=${(err as Error).stack}`,
-      );
-      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        errLog(
-          `weixin getUpdates: ${MAX_CONSECUTIVE_FAILURES} consecutive failures, backing off 30s`,
-        );
-        aLog.error(
-          `getUpdates: ${MAX_CONSECUTIVE_FAILURES} consecutive failures, backing off 30s`,
-        );
-        consecutiveFailures = 0;
-        await sleep(30_000, abortSignal);
-      } else {
-        await sleep(2000, abortSignal);
       }
     }
+  } finally {
+    inbox.close();
+    proactive.suspend();
+    abortSignal?.removeEventListener("abort", stopInbox);
+    await inbox.settled();
   }
   aLog.info(`Monitor ended`);
 }
