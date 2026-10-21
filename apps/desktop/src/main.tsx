@@ -8,8 +8,6 @@ import React, {
 } from "react";
 import { type Root, createRoot } from "react-dom/client";
 import { Toaster, toast } from "sonner";
-import setupLoopVideoUrl from "../assets/setup-animation-loop.mp4";
-import setupVideoUrl from "../assets/setup-animation.mp4";
 import type {
   AppInfo,
   DesktopChromeMode,
@@ -25,6 +23,8 @@ import type {
   RuntimeUnitState,
 } from "../shared/host";
 import { resolveDesktopUpdateExperience } from "../shared/update-policy";
+import { DeferredSurface } from "./components/deferred-surface";
+import { StartupState } from "./components/startup-state";
 import { SurfaceFrame } from "./components/surface-frame";
 import { UpdateBadge, UpdateBanner } from "./components/update-banner";
 import { useAutoUpdate } from "./hooks/use-auto-update";
@@ -992,36 +992,18 @@ function DesktopShell() {
   );
   const update = useAutoUpdate({ experience: updateExperience });
 
-  // Setup animation phases:
-  // "playing" → main video (23s) plays once
-  // "looping" → short loop video repeats until cold-start is ready
-  // "fading" → overlay fades out (0.6s CSS transition)
-  // "done" → overlay removed from DOM
-  const [setupPhase, setSetupPhase] = useState<
-    "playing" | "looping" | "fading" | "done"
-  >(window.nexuHost.bootstrap.needsSetupAnimation ? "playing" : "done");
-
-  // When animation finishes, notify main process to restore vibrancy
+  // First-run preparation has no minimum display duration. As soon as the
+  // local configuration API is available, hand off to the workspace.
   useEffect(() => {
-    if (
-      setupPhase === "done" &&
-      window.nexuHost.bootstrap.needsSetupAnimation
-    ) {
+    if (runtimeConfig && window.nexuHost.bootstrap.needsSetupAnimation) {
       void notifySetupAnimationComplete();
     }
-  }, [setupPhase]);
+  }, [runtimeConfig]);
 
   useEffect(() => {
     void getRuntimeConfig()
-      .then((config) => {
-        setRuntimeConfig(config);
-        // Cold-start is done — if we're still in the looping phase, fade out.
-        // If main video hasn't finished yet, it will transition to fade on its
-        // own via onEnded (the main video is the minimum guaranteed animation).
-        setSetupPhase((prev) => (prev === "looping" ? "fading" : prev));
-      })
+      .then(setRuntimeConfig)
       .catch(() => null);
-
     void getRuntimeState()
       .then(setRuntimeState)
       .catch(() => null);
@@ -1089,7 +1071,7 @@ function DesktopShell() {
     let cancelled = false;
     setControllerSurfaceState("polling");
     const readyUrl = new URL(
-      "/api/internal/desktop/ready",
+      "/api/internal/desktop/ui-ready",
       runtimeConfig.urls.web,
     ).toString();
 
@@ -1218,11 +1200,9 @@ function DesktopShell() {
       </aside>
 
       <main className="desktop-shell-stage">
-        <div
-          style={{ display: activeSurface === "control" ? "contents" : "none" }}
-        >
+        <DeferredSurface active={activeSurface === "control"}>
           <EmbeddedControlPlane />
-        </div>
+        </DeferredSurface>
 
         <div style={{ display: activeSurface === "web" ? "contents" : "none" }}>
           {desktopWebUrl ? (
@@ -1266,12 +1246,8 @@ function DesktopShell() {
               </div>
             </section>
           ) : (
-            // Normal polling state: show the brand NexuLoader instead of a
-            // text card with a "Retry controller" button. SurfaceFrame with
-            // src={null} renders its built-in NexuLoader overlay, which is
-            // the same loader used once the webview mounts — producing a
-            // seamless visual transition once the controller is ready.
-            // See issue #876.
+            // Use one lightweight status view while the local API starts and
+            // while the workspace document loads. No animation gates readiness.
             <SurfaceFrame
               description="Authenticated workspace surface served by the repo-local web sidecar."
               src={null}
@@ -1281,25 +1257,17 @@ function DesktopShell() {
             />
           )}
         </div>
-        <div
-          style={{
-            display: activeSurface === "openclaw" ? "contents" : "none",
-          }}
-        >
+        <DeferredSurface active={activeSurface === "openclaw"}>
           <SurfaceFrame
             description="Local OpenClaw gateway UI for inspecting runtime auth, models, and sessions."
             src={desktopOpenClawUrl}
             title="OpenClaw Gateway"
             version={0}
           />
-        </div>
-        <div
-          style={{
-            display: activeSurface === "diagnostics" ? "contents" : "none",
-          }}
-        >
+        </DeferredSurface>
+        <DeferredSurface active={activeSurface === "diagnostics"}>
           <DiagnosticsPage runtimeConfig={runtimeConfig} />
-        </div>
+        </DeferredSurface>
       </main>
 
       <UpdateBanner
@@ -1322,81 +1290,12 @@ function DesktopShell() {
         version={update.version}
       />
 
-      {/* Setup animation overlay — shown during first install / post-update extraction.
-          Phase flow: "playing" (main 23s video) → "looping" (4s loop until ready)
-                      → "fading" (0.6s opacity transition) → "done" (removed from DOM).
-          If cold-start finishes during the main video, it skips straight to "fading"
-          when the main video ends (no loop needed). */}
-      {setupPhase !== "done" && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 99999,
-            background: "#ffffff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            opacity: setupPhase === "fading" ? 0 : 1,
-            transition: "opacity 0.6s ease-out",
-          }}
-          onTransitionEnd={() => {
-            if (setupPhase === "fading") setSetupPhase("done");
-          }}
-        >
-          {/* Draggable title bar area so window remains movable during setup */}
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 52,
-              // @ts-expect-error Electron CSS property for window dragging
-              WebkitAppRegion: "drag",
-              zIndex: 1,
-            }}
-          />
-
-          {/* Both videos are mounted simultaneously. The loop video preloads
-              in the background while the main video plays, so the transition
-              is instant — no blank gap waiting for the loop video to buffer.
-              Visibility is controlled via CSS (display none/block). */}
-          <video
-            autoPlay
-            muted
-            playsInline
-            src={setupVideoUrl}
-            onEnded={() => {
-              setSetupPhase((prev) =>
-                prev === "playing"
-                  ? runtimeConfig
-                    ? "fading"
-                    : "looping"
-                  : prev,
-              );
-            }}
-            onError={() => setSetupPhase("done")}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "contain",
-              display: setupPhase === "playing" ? "block" : "none",
-            }}
-          />
-          <video
-            autoPlay
-            muted
-            playsInline
-            loop
-            src={setupLoopVideoUrl}
-            onError={() => setSetupPhase("fading")}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "contain",
-              display: setupPhase === "looping" ? "block" : "none",
-            }}
+      {window.nexuHost.bootstrap.needsSetupAnimation && !runtimeConfig && (
+        <div className="bridge-startup-overlay">
+          <div className="bridge-startup-drag-region" />
+          <StartupState
+            title="正在准备本地环境"
+            description="首次打开需要准备运行文件，完成后会自动进入。"
           />
         </div>
       )}

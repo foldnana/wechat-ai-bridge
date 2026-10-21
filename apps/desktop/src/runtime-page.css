@@ -1589,3 +1589,101 @@ body,
     flex-direction: column;
   }
 }
+
+/* The boot surface follows the Bridge palette and never delays readiness. */
+.bridge-startup-overlay,
+.bridge-surface-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f6f8f3;
+  color: #214e3b;
+  z-index: 10;
+}
+
+.bridge-startup-overlay {
+  position: fixed;
+  z-index: 99999;
+}
+
+.bridge-startup-drag-region {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 36px;
+  -webkit-app-region: drag;
+}
+
+.bridge-startup-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(420px, calc(100% - 48px));
+  padding: 28px;
+  text-align: center;
+}
+
+.bridge-startup-mark {
+  position: relative;
+  width: 62px;
+  height: 62px;
+  margin-bottom: 16px;
+  color: #286148;
+}
+
+.bridge-startup-mark svg {
+  width: 100%;
+  height: 100%;
+}
+
+.bridge-startup-mark.is-busy::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border: 1px solid #d9e5d9;
+  border-top-color: #286148;
+  border-radius: 50%;
+  animation: bridge-startup-spin 1.2s linear infinite;
+}
+
+.bridge-startup-brand {
+  font-family: Georgia, serif;
+  font-size: 26px;
+  letter-spacing: -0.8px;
+}
+
+.bridge-startup-state h1 {
+  margin: 20px 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.bridge-startup-state p {
+  margin: 0;
+  color: #63776a;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.bridge-startup-retry {
+  margin-top: 18px;
+  padding: 9px 16px;
+  color: #fff;
+  background: #214e3b;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+@keyframes bridge-startup-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bridge-startup-mark.is-busy::after {
+    animation: none;
+  }
+}

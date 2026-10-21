@@ -20,7 +20,7 @@ export function useDesktopRuntimeConfig() {
 
     let cancelled = false;
     const readyUrl = new URL(
-      "/api/internal/desktop/ready",
+      "/api/internal/desktop/ui-ready",
       runtimeConfig.urls.web,
     ).toString();
 

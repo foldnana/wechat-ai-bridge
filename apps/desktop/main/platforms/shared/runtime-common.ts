@@ -74,17 +74,16 @@ export async function runManagedColdStart({
   waitForControllerReadiness,
 }: RunPlatformColdStartArgs) {
   logStartupStep("managedColdStart:start");
-  diagnosticsReporter?.markColdStartRunning("starting controller");
-  logColdStart("starting controller");
-  await orchestrator.startOne("controller");
+  diagnosticsReporter?.markColdStartRunning("starting controller and web");
+  logColdStart("starting controller and web");
+  await Promise.all([
+    orchestrator.startOne("controller"),
+    orchestrator.startOne("web"),
+  ]);
 
   diagnosticsReporter?.markColdStartRunning("waiting for controller readiness");
   logColdStart("waiting for controller readiness");
   await waitForControllerReadiness();
-
-  diagnosticsReporter?.markColdStartRunning("starting web");
-  logColdStart("starting web");
-  await orchestrator.startOne("web");
 
   const sessionId = rotateDesktopLogSession();
   logColdStart(`cold start session ready sessionId=${sessionId}`);

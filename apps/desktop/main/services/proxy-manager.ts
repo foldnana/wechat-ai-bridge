@@ -29,6 +29,8 @@ type ElectronSessionLike = Pick<
   "setProxy" | "closeAllConnections" | "resolveProxy"
 >;
 
+const PROXY_DIAGNOSTICS_TIMEOUT_MS = 1_500;
+
 export class ProxyManager {
   constructor(private readonly session: ElectronSessionLike) {}
 
@@ -48,7 +50,7 @@ export class ProxyManager {
       targets.map(async (target) => ({
         label: target.label,
         url: target.url,
-        result: await this.session.resolveProxy(target.url),
+        result: await this.resolveProxyForDiagnostics(target.url),
       })),
     );
 
@@ -72,6 +74,25 @@ export class ProxyManager {
       },
       resolutions,
     };
+  }
+
+  private async resolveProxyForDiagnostics(url: string): Promise<string> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        this.session.resolveProxy(url),
+        new Promise<string>((resolve) => {
+          timer = setTimeout(
+            () => resolve("TIMEOUT"),
+            PROXY_DIAGNOSTICS_TIMEOUT_MS,
+          );
+        }),
+      ]);
+    } catch {
+      return "UNAVAILABLE";
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 

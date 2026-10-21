@@ -112,7 +112,7 @@ export async function ensureDesktopControllerReady(
   const attemptTimeoutMs = options.attemptTimeoutMs ?? 15_000;
   const finalAttemptTimeoutMs =
     options.finalAttemptTimeoutMs ?? attemptTimeoutMs * 4;
-  const pollIntervalMs = options.pollIntervalMs ?? 1_000;
+  const pollIntervalMs = options.pollIntervalMs ?? 200;
   const requestTimeoutMs = options.requestTimeoutMs ?? 3_000;
 
   for (let attempt = 0; attempt <= recoveryAttempts; attempt += 1) {

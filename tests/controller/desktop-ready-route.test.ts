@@ -44,6 +44,19 @@ function createContainer(
 }
 
 describe("desktop ready route", () => {
+  it("makes the configuration UI available while runtime health is still stabilizing", async () => {
+    const container = createContainer("stabilizing-runtime");
+    const app = new OpenAPIHono<ControllerBindings>();
+    registerDesktopRoutes(app, container);
+
+    const response = await app.request("/api/internal/desktop/ui-ready");
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ready: true });
+    expect(container.controlPlaneHealth.probe).not.toHaveBeenCalled();
+    expect(container.configStore.listBots).not.toHaveBeenCalled();
+  });
+
   it("reports not ready before bootstrap reaches ready", async () => {
     const app = new OpenAPIHono<ControllerBindings>();
     registerDesktopRoutes(app, createContainer("stabilizing-runtime"));

@@ -78,6 +78,49 @@ describe("ProxyManager", () => {
     expect(setProxy).toHaveBeenCalledWith({ mode: "system" });
   });
 
+  it("bounds stalled proxy diagnostics without delaying other results", async () => {
+    vi.useFakeTimers();
+    try {
+      const manager = new ProxyManager({
+        setProxy: vi.fn(async () => undefined),
+        closeAllConnections: vi.fn(async () => undefined),
+        resolveProxy: vi.fn((url: string) =>
+          url.includes("50800")
+            ? new Promise<string>(() => {})
+            : Promise.resolve("DIRECT"),
+        ),
+      });
+      const pending = manager.collectDiagnostics(readProxyPolicy({}), [
+        { label: "controller", url: "http://127.0.0.1:50800" },
+        { label: "web", url: "http://127.0.0.1:50810" },
+      ]);
+
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect((await pending).resolutions.map(({ result }) => result)).toEqual([
+        "TIMEOUT",
+        "DIRECT",
+      ]);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps failed diagnostic resolution from rejecting the snapshot", async () => {
+    const manager = new ProxyManager({
+      setProxy: vi.fn(async () => undefined),
+      closeAllConnections: vi.fn(async () => undefined),
+      resolveProxy: vi.fn(async () => {
+        throw new Error("resolver unavailable");
+      }),
+    });
+    const snapshot = await manager.collectDiagnostics(readProxyPolicy({}), [
+      { label: "web", url: "http://127.0.0.1:50810" },
+    ]);
+
+    expect(snapshot.resolutions[0]?.result).toBe("UNAVAILABLE");
+  });
+
   it("supports explicit direct mode", async () => {
     const setProxy = vi.fn(async () => undefined);
     const manager = new ProxyManager({

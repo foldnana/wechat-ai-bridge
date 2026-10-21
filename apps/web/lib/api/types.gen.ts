@@ -392,6 +392,24 @@ export type PutApiV1BridgePresetResponses = {
 
 export type PutApiV1BridgePresetResponse = PutApiV1BridgePresetResponses[keyof PutApiV1BridgePresetResponses];
 
+export type GetApiInternalDesktopUiReadyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/internal/desktop/ui-ready';
+};
+
+export type GetApiInternalDesktopUiReadyResponses = {
+    /**
+     * Local configuration API is available
+     */
+    200: {
+        ready: boolean;
+    };
+};
+
+export type GetApiInternalDesktopUiReadyResponse = GetApiInternalDesktopUiReadyResponses[keyof GetApiInternalDesktopUiReadyResponses];
+
 export type PostApiInternalDesktopShellOpenData = {
     body?: {
         path: string;

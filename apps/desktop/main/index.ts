@@ -395,7 +395,7 @@ async function refreshProxyDiagnostics(): Promise<void> {
   const targets = [
     { label: "controller", url: runtimeConfig.urls.controllerBase },
     { label: "openclaw", url: runtimeConfig.urls.openclawBase },
-    { label: "external", url: "https://nexu.io" },
+    { label: "web", url: runtimeConfig.urls.web },
   ];
   const snapshot = await proxyManager.collectDiagnostics(
     runtimeConfig.proxy,
@@ -513,6 +513,14 @@ function showAboutDialog(): void {
 }
 
 function installApplicationMenu(): void {
+  if (process.platform === "win32" && !productionDebugMode) {
+    Menu.setApplicationMenu(null);
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.setMenu(null);
+      window.setMenuBarVisibility(false);
+    }
+    return;
+  }
   const developMenu: MenuItemConstructorOptions = {
     label: "Develop",
     submenu: [
@@ -695,18 +703,27 @@ function logSleepGuard(entry: SleepGuardLogEntry): void {
 async function waitForControllerReadiness(): Promise<void> {
   const startedAt = Date.now();
   const timeoutMs = 15_000;
-  const probeUrl = new URL("/health", runtimeConfig.urls.controllerBase);
+  const probeUrl = new URL(
+    "/api/internal/desktop/ui-ready",
+    runtimeConfig.urls.controllerBase,
+  );
   let attempt = 0;
 
   while (Date.now() - startedAt < timeoutMs) {
     try {
       const response = await fetch(probeUrl, {
+        signal: AbortSignal.timeout(
+          Math.max(1, Math.min(1000, timeoutMs - (Date.now() - startedAt))),
+        ),
         headers: {
           Accept: "application/json",
         },
       });
 
-      if (response.status < 500) {
+      if (
+        response.ok &&
+        ((await response.json()) as { ready?: boolean }).ready === true
+      ) {
         logColdStart(
           `controller ready via ${probeUrl.pathname} status=${response.status} after ${Date.now() - startedAt}ms`,
         );
@@ -728,17 +745,16 @@ async function waitForControllerReadiness(): Promise<void> {
 }
 
 async function runDesktopColdStart(): Promise<void> {
-  diagnosticsReporter?.markColdStartRunning("starting controller");
-  logColdStart("starting controller");
-  await orchestrator.startOne("controller");
+  diagnosticsReporter?.markColdStartRunning("starting local services");
+  logColdStart("starting controller and web in parallel");
+  await Promise.all([
+    orchestrator.startOne("controller"),
+    orchestrator.startOne("web"),
+  ]);
 
   diagnosticsReporter?.markColdStartRunning("waiting for controller readiness");
   logColdStart("waiting for controller readiness");
   await waitForControllerReadiness();
-
-  diagnosticsReporter?.markColdStartRunning("starting web");
-  logColdStart("starting web");
-  await orchestrator.startOne("web");
 
   const sessionId = rotateDesktopLogSession();
   logColdStart(`cold start session ready sessionId=${sessionId}`);
@@ -1176,8 +1192,9 @@ function createMainWindow(): BrowserWindow {
     height: 720,
     minWidth: needsSetupExtraction ? 1280 : 1120,
     minHeight: 720,
-    backgroundColor: isMacOS ? "#00000000" : "#0B1020",
-    title: "nexu",
+    backgroundColor: isMacOS ? "#00000000" : "#f5f8f3",
+    title: "微信 AI 接入助手",
+    autoHideMenuBar: !isMacOS,
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 18, y: 18 },
     ...(isMacOS
@@ -1200,7 +1217,10 @@ function createMainWindow(): BrowserWindow {
   });
 
   if (process.platform === "win32") {
+    if (!productionDebugMode) window.setMenu(null);
+    window.setMenuBarVisibility(productionDebugMode);
     window.setSkipTaskbar(!shellPreferences.showInDock);
+    logLaunchTimeline(`Windows menu bar visible=${window.isMenuBarVisible()}`);
   }
 
   // Disable sandbox for webviews so preload scripts have access to Node.js APIs
@@ -1556,7 +1576,6 @@ app.whenReady().then(async () => {
     installApplicationMenu();
   });
   diagnosticsReporter = new DesktopDiagnosticsReporter(orchestrator);
-  await refreshProxyDiagnostics();
   diagnosticsReporter.recordStartupProbe({
     source: "main",
     stage: "main:app-when-ready",
@@ -1660,10 +1679,8 @@ app.whenReady().then(async () => {
       } else {
         await runDesktopColdStart();
       }
-      await refreshProxyDiagnostics();
       healthCheck.recordSuccess();
     } catch (error) {
-      await refreshProxyDiagnostics().catch(() => undefined);
       healthCheck.recordFailure();
       diagnosticsReporter?.markColdStartFailed(
         error instanceof Error ? error.message : String(error),
@@ -1679,6 +1696,7 @@ app.whenReady().then(async () => {
     } finally {
       // Unblock renderer — it will get the final config (or show error state)
       resolveColdStartReady();
+      void refreshProxyDiagnostics().catch(() => undefined);
     }
 
     // Install launchd quit handler regardless of cold-start success/failure

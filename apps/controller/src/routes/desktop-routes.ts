@@ -47,6 +47,24 @@ export function registerDesktopRoutes(
   app: OpenAPIHono<ControllerBindings>,
   container: ControllerContainer,
 ): void {
+  // The configuration UI can work while the WeChat runtime is still warming up.
+  // Keep full runtime health on /ready; this endpoint only confirms the local API.
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/api/internal/desktop/ui-ready",
+      tags: ["Desktop"],
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: z.object({ ready: z.boolean() }) },
+          },
+          description: "Local configuration API is available",
+        },
+      },
+    }),
+    (c) => c.json({ ready: true }, 200),
+  );
   const shellOpenRequestSchema = z.object({
     path: z.string().min(1),
   });
