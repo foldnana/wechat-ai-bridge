@@ -14,6 +14,7 @@ import {
   nativeTheme,
   powerMonitor,
   powerSaveBlocker,
+  screen,
   session,
   shell,
 } from "electron";
@@ -1186,12 +1187,29 @@ app.on("before-quit", () => {
 function createMainWindow(): BrowserWindow {
   logLaunchTimeline("main window creation requested");
   const isMacOS = process.platform === "darwin";
+  const isWindows = process.platform === "win32";
+  const workArea = screen.getDisplayNearestPoint(
+    screen.getCursorScreenPoint(),
+  ).workArea;
+  // Keep the desktop layout stable, fitting the initial window to smaller
+  // screens in logical pixels so Windows display scaling is respected.
+  const width = isWindows ? Math.min(1280, workArea.width) : 1280;
+  const height = isWindows ? Math.min(800, workArea.height) : 720;
   const shellPreferences = getDesktopShellPreferences();
   const window = new BrowserWindow({
-    width: 1280,
-    height: 720,
-    minWidth: needsSetupExtraction ? 1280 : 1120,
-    minHeight: 720,
+    width,
+    height,
+    minWidth: isWindows ? width : needsSetupExtraction ? 1280 : 1120,
+    minHeight: isWindows ? height : 720,
+    resizable: !isWindows,
+    maximizable: !isWindows,
+    fullscreenable: !isWindows,
+    ...(isWindows
+      ? {
+          x: workArea.x + Math.floor((workArea.width - width) / 2),
+          y: workArea.y + Math.floor((workArea.height - height) / 2),
+        }
+      : {}),
     backgroundColor: isMacOS ? "#00000000" : "#f5f8f3",
     title: "微信 AI 接入助手",
     autoHideMenuBar: !isMacOS,
@@ -1221,6 +1239,9 @@ function createMainWindow(): BrowserWindow {
     window.setMenuBarVisibility(productionDebugMode);
     window.setSkipTaskbar(!shellPreferences.showInDock);
     logLaunchTimeline(`Windows menu bar visible=${window.isMenuBarVisible()}`);
+    logLaunchTimeline(
+      `Windows fixed window size=${window.getSize().join("x")} resizable=${window.isResizable()} maximizable=${window.isMaximizable()} fullscreenable=${window.isFullScreenable()}`,
+    );
   }
 
   // Disable sandbox for webviews so preload scripts have access to Node.js APIs

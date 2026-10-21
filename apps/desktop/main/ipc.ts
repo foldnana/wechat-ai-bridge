@@ -686,8 +686,8 @@ export function registerIpcHandlers(
           // overlay has been removed.
           const win = BrowserWindow.getAllWindows()[0];
           if (win) {
-            win.setMinimumSize(1120, 720);
             if (process.platform === "darwin") {
+              win.setMinimumSize(1120, 720);
               win.setBackgroundColor("#00000000");
               win.setVibrancy("sidebar");
             }
