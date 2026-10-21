@@ -19,6 +19,7 @@ import {
   getSlimclawRuntimeRoot,
   resolveSlimclawRuntimeArtifacts,
 } from "@nexu/slimclaw";
+import { validateRuntimePluginDependencies } from "./lib/runtime-plugin-dependencies.mjs";
 import { resolvePnpmCommand } from "./platforms/filesystem-compat.mjs";
 import { resolveBuildTargetPlatform } from "./platforms/platform-resolver.mjs";
 import { createPlatformCommandSpec } from "./platforms/process-compat.mjs";
@@ -461,46 +462,19 @@ async function validateWinUnpackedReuse(releaseRoot) {
   }
 }
 
-const requiredBundledPluginArtifacts = [
-  {
-    pluginId: "openclaw-weixin",
-    requiredPath: ["index.ts"],
-    label: "WeChat entry",
-  },
-  {
-    pluginId: "nexu-runtime-model",
-    requiredPath: ["index.js"],
-    label: "model routing entry",
-  },
-];
-
 async function validatePackagedBundledPluginDependencies(releaseRoot) {
   const winUnpackedRoot = resolve(releaseRoot, "win-unpacked");
-
-  for (const artifact of requiredBundledPluginArtifacts) {
-    const pluginRoot = resolve(
+  await validateRuntimePluginDependencies(
+    resolve(
       winUnpackedRoot,
       "resources",
       "runtime",
       "controller",
       "static",
       "runtime-plugins",
-      artifact.pluginId,
-    );
-    const dependencyPath = resolve(pluginRoot, ...artifact.requiredPath);
-
-    if (!(await pathExists(pluginRoot))) {
-      throw new Error(
-        `[dist:win] packaged app is missing ${artifact.pluginId}: ${pluginRoot}`,
-      );
-    }
-
-    if (!(await pathExists(dependencyPath))) {
-      throw new Error(
-        `[dist:win] packaged app is missing ${artifact.pluginId} dependency ${artifact.label}: ${dependencyPath}`,
-      );
-    }
-  }
+    ),
+    "Windows packaged runtime plugins",
+  );
 }
 
 async function ensureExistingBuildArtifacts() {

@@ -1,5 +1,6 @@
 import { cp, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { validateRuntimePluginDependencies } from "./lib/runtime-plugin-dependencies.mjs";
 import {
   copyRuntimeDependencyClosure,
   getSidecarRoot,
@@ -31,47 +32,9 @@ const sidecarPackageJsonPath = resolve(sidecarRoot, "package.json");
 const diagnosticsEnabled =
   process.env.NEXU_DESKTOP_DIST_DIAGNOSTICS === "1" ||
   process.env.NEXU_DESKTOP_DIST_DIAGNOSTICS?.toLowerCase() === "true";
-const requiredBundledPluginArtifacts = [
-  {
-    pluginId: "openclaw-weixin",
-    requiredPath: "index.ts",
-    label: "WeChat entry",
-  },
-  {
-    pluginId: "nexu-runtime-model",
-    requiredPath: "index.js",
-    label: "model routing entry",
-  },
-];
 
 function formatDurationMs(durationMs) {
   return `${(durationMs / 1000).toFixed(3)}s`;
-}
-
-async function ensureBundledPluginDependencyTree(rootDir, label) {
-  const missing = [];
-
-  for (const artifact of requiredBundledPluginArtifacts) {
-    const pluginDir = resolve(rootDir, artifact.pluginId);
-    const requiredPath = resolve(
-      rootDir,
-      artifact.pluginId,
-      artifact.requiredPath,
-    );
-    if (!(await pathExists(pluginDir))) {
-      missing.push(pluginDir);
-      continue;
-    }
-    if (!(await pathExists(requiredPath))) {
-      missing.push(`${artifact.pluginId}:${artifact.label}:${requiredPath}`);
-    }
-  }
-
-  if (missing.length > 0) {
-    throw new Error(
-      `[controller-sidecar] ${label} is missing bundled plugin dependencies: ${missing.join(", ")}`,
-    );
-  }
 }
 
 async function ensureBuildArtifacts() {
@@ -116,7 +79,7 @@ async function prepareControllerSidecar() {
   }
 
   if (await pathExists(controllerBundledPluginsRoot)) {
-    await ensureBundledPluginDependencyTree(
+    await validateRuntimePluginDependencies(
       resolve(controllerStaticRoot, "runtime-plugins"),
       "controller runtime plugins",
     );
@@ -124,7 +87,7 @@ async function prepareControllerSidecar() {
       recursive: true,
       dereference: true,
     });
-    await ensureBundledPluginDependencyTree(
+    await validateRuntimePluginDependencies(
       resolve(sidecarStaticRoot, "runtime-plugins"),
       "controller sidecar runtime plugins",
     );

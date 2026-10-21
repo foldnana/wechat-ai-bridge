@@ -14,6 +14,7 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getSlimclawRuntimeRoot } from "@nexu/slimclaw";
+import { validateRuntimePluginDependencies } from "./lib/runtime-plugin-dependencies.mjs";
 import { resolveBuildTargetPlatform } from "./platforms/platform-resolver.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -78,15 +79,6 @@ async function ensureExistingPath(path, label) {
     await lstat(path);
   } catch {
     throw new Error(`[dist:mac] Missing ${label}: ${path}`);
-  }
-}
-
-async function pathExists(targetPath) {
-  try {
-    await lstat(targetPath);
-    return true;
-  } catch {
-    return false;
   }
 }
 
@@ -474,19 +466,6 @@ async function stapleNotarizedAppBundles() {
   }
 }
 
-const requiredBundledPluginArtifacts = [
-  {
-    pluginId: "openclaw-weixin",
-    requiredPath: ["index.ts"],
-    label: "WeChat entry",
-  },
-  {
-    pluginId: "nexu-runtime-model",
-    requiredPath: ["index.js"],
-    label: "model routing entry",
-  },
-];
-
 async function validatePackagedBundledPluginDependencies(releaseRoot) {
   const appBundleDirs = await readdir(releaseRoot, { withFileTypes: true });
   const packagedMacBundles = appBundleDirs.filter(
@@ -503,30 +482,18 @@ async function validatePackagedBundledPluginDependencies(releaseRoot) {
 
   for (const entry of packagedMacBundles) {
     const appRoot = resolve(releaseRoot, entry.name, "Nexu.app");
-    for (const artifact of requiredBundledPluginArtifacts) {
-      const pluginRoot = resolve(
+    await validateRuntimePluginDependencies(
+      resolve(
         appRoot,
         "Contents",
         "Resources",
         "runtime",
         "controller",
-        "plugins",
-        artifact.pluginId,
-      );
-      const dependencyPath = resolve(pluginRoot, ...artifact.requiredPath);
-
-      if (!(await pathExists(pluginRoot))) {
-        throw new Error(
-          `[dist:mac] packaged app is missing ${artifact.pluginId}: ${pluginRoot}`,
-        );
-      }
-
-      if (!(await pathExists(dependencyPath))) {
-        throw new Error(
-          `[dist:mac] packaged app is missing ${artifact.pluginId} dependency ${artifact.label}: ${dependencyPath}`,
-        );
-      }
-    }
+        "static",
+        "runtime-plugins",
+      ),
+      "macOS packaged runtime plugins",
+    );
   }
 }
 

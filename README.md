@@ -48,6 +48,8 @@ pnpm dist:win:local
 
 Windows 打包前先停止开发服务，避免开发文件监视器占用暂存目录。如果 Electron 下载不可用，可把环境变量 `NEXU_DESKTOP_ELECTRON_DIST` 指向已安装、版本一致的 Electron `dist` 目录；不会自动下载或安装新版本。
 
+打包会检查微信插件自己的生产依赖，不能依靠仓库根目录的依赖代替。若曾通过 `NEXU_SKIP_RUNTIME_POSTINSTALL` 跳过运行时准备，需先运行 `npm --prefix apps/controller/static/runtime-plugins/openclaw-weixin ci --omit=dev --ignore-scripts --no-audit --no-fund`，再重新打包。否则用户目录中的插件可能因缺少 `zod` 等模块而无法收消息，即使主界面和本地服务能够正常打开。
+
 ## 目录
 
 - apps/desktop：Electron 桌面外壳、后台生命周期和更新。
