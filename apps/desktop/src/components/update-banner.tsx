@@ -42,9 +42,6 @@ const i18n = {
     releaseNotes: "Release notes",
     unknownError: "Unknown error",
     closeLabel: "Close",
-    localValidation: "Local validation build",
-    localValidationDetail:
-      "This build does not use the production update feed by default. To validate the real update flow, adjust the environment variables according to the repository documentation before testing.",
     localTestFeed: "Update test mode",
     localTestFeedDetail:
       "This local validation build has a test update feed configured. Before testing, adjust the environment variables according to the repository documentation.",
@@ -72,9 +69,6 @@ const i18n = {
     releaseNotes: "更新日志",
     unknownError: "未知错误",
     closeLabel: "关闭",
-    localValidation: "本地验收构建",
-    localValidationDetail:
-      "当前版本为本地验收构建，未默认连接正式更新源。请按照仓库内的文档说明调整环境变量后测试。",
     localTestFeed: "更新测试模式",
     localTestFeedDetail:
       "当前版本为本地验收构建，已配置测试更新源。请按照仓库内的文档说明调整环境变量后测试。",
@@ -123,11 +117,9 @@ export function UpdateBanner({
   onInstall,
   onDismiss,
 }: UpdateBannerProps) {
-  const isLocalValidation =
-    phase === "idle" && experience === "local-validation";
   const isLocalTestFeed = phase === "idle" && experience === "local-test-feed";
 
-  if (phase === "idle" && !isLocalValidation && !isLocalTestFeed) {
+  if (phase === "idle" && !isLocalTestFeed) {
     return null;
   }
 
@@ -143,7 +135,6 @@ export function UpdateBanner({
   const isReady = phase === "ready";
   const isError = phase === "error";
   const isAvailable = phase === "available";
-  const isLocalInfo = isLocalValidation || isLocalTestFeed;
   const showsVersionDetails = (isAvailable || isReady) && Boolean(version);
   const showsReleaseNotes = isAvailable && Boolean(releaseNotes);
   const downloadLabel =
@@ -173,7 +164,6 @@ export function UpdateBanner({
             {isAvailable && version && t.available(version)}
             {isReady && version && t.ready(version)}
             {isError && t.error}
-            {isLocalValidation && t.localValidation}
             {isLocalTestFeed && t.localTestFeed}
           </span>
         </div>
@@ -212,10 +202,8 @@ export function UpdateBanner({
         </div>
       )}
 
-      {isLocalInfo && (
-        <div className="update-card-message">
-          {isLocalValidation ? t.localValidationDetail : t.localTestFeedDetail}
-        </div>
+      {isLocalTestFeed && (
+        <div className="update-card-message">{t.localTestFeedDetail}</div>
       )}
 
       {showsVersionDetails && version && (
@@ -286,18 +274,6 @@ export function UpdateBanner({
             type="button"
           >
             {t.later}
-          </button>
-        </div>
-      )}
-
-      {isLocalValidation && (
-        <div className="update-card-actions">
-          <button
-            className="update-card-btn update-card-btn--ghost"
-            onClick={onDismiss}
-            type="button"
-          >
-            {t.dismiss}
           </button>
         </div>
       )}

@@ -17,6 +17,11 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { BridgeMark } from "../components/bridge/bridge-mark";
 import { DiagnosticsButton } from "../components/bridge/diagnostics-button";
 import { ThemePicker } from "../components/bridge/theme-picker";
+import {
+  WelcomeGuide,
+  rememberWelcomeGuide,
+  shouldShowWelcomeGuide,
+} from "../components/bridge/welcome-guide";
 import { WhaleCompanion } from "../components/bridge/whale-companion";
 import {
   Dialog,
@@ -61,6 +66,11 @@ export function WorkspaceLayout() {
     main.current?.focus({ preventScroll: true });
   }, [location.pathname]);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(shouldShowWelcomeGuide);
+  const closeGuide = () => {
+    rememberWelcomeGuide();
+    setGuideOpen(false);
+  };
   const [motion, setMotion] = useState(() => {
     try {
       return localStorage.getItem("bridge-motion") !== "off";
@@ -191,6 +201,7 @@ export function WorkspaceLayout() {
           </div>
         </main>
       </div>
+      {guideOpen && <WelcomeGuide onClose={closeGuide} />}
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent className="bridge-dialog">
           <span className="bridge-eyebrow">使用说明</span>
@@ -221,6 +232,16 @@ export function WorkspaceLayout() {
             <Laptop size={16} />
             使用时电脑需要保持开机、联网且不休眠。目前支持个人微信 ClawBot。
           </p>
+          <button
+            type="button"
+            className="bridge-button bridge-button-secondary"
+            onClick={() => {
+              setHelpOpen(false);
+              setGuideOpen(true);
+            }}
+          >
+            重新查看新手指引
+          </button>
           <button
             type="button"
             className="bridge-button"

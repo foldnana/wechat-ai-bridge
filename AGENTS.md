@@ -16,7 +16,7 @@ This repository is wechat-ai-bridge, a Windows-first local WeChat AI connection 
 - No mini-program or remote control in the first release.
 - Deliver Windows as a ZIP containing the complete runnable folder (extract and run). Do not add code signing, an installer or automatic updates. Diagnostic export hardening and OS credential encryption are deferred; the current credential scope is masking local provider-config API responses while retaining saved-key reuse.
 
-- During development, do not rebuild EXEs or ZIPs for every change. Package only when explicitly requested or for the final release stage.
+- During development, rebuilding the runnable EXE for validation is allowed without a separate request. Do not create a ZIP archive for every change; create one when explicitly requested or for final delivery. The user's preference concerns compressed archives, not EXE builds.
 
 ## Engineering
 

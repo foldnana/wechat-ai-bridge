@@ -52,7 +52,12 @@ test.afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
-async function setup(page: Page) {
+async function setup(page: Page, showGuide = false) {
+  if (!showGuide) {
+    await page.addInitScript(() =>
+      localStorage.setItem("bridge-welcome-seen", "yes"),
+    );
+  }
   const saved: Array<Record<string, unknown>> = [];
   await page.route("**/*", async (route) => {
     const url = new URL(route.request().url());
@@ -1121,4 +1126,114 @@ test("manual entry cancels a slow discovery without blocking model testing", asy
   } finally {
     release();
   }
+});
+
+test("welcome guide completes three steps without configuring or sending anything", async ({
+  page,
+}, testInfo) => {
+  const saved = await setup(page, true);
+  const mutations: string[] = [];
+  page.on("request", (request) => {
+    // Theme preference synchronization already runs at application startup.
+    if (
+      new URL(request.url()).pathname.startsWith("/api/v1/") &&
+      ["POST", "PUT", "PATCH", "DELETE"].includes(request.method())
+    )
+      mutations.push(request.url());
+  });
+  await page.goto(`${origin}/workspace`);
+  const guide = page.getByRole("dialog");
+  await expect(
+    guide.getByRole("heading", { name: "先把模型接上" }),
+  ).toBeVisible();
+  await expect(guide.getByRole("button", { name: "上一步" })).toBeDisabled();
+  await page.screenshot({
+    path: testInfo.outputPath("welcome-step1.png"),
+    animations: "disabled",
+  });
+  // Hit the icon at the center, not just the button's edge.
+  const icon = await guide
+    .getByRole("button", { name: "下一步" })
+    .locator("svg")
+    .boundingBox();
+  if (!icon) throw new Error("Guide next icon is missing");
+  await page.mouse.click(icon.x + icon.width / 2, icon.y + icon.height / 2);
+  await expect(guide.getByText("电脑要开机", { exact: false })).toBeVisible();
+  await guide.getByRole("button", { name: "上一步" }).click();
+  await expect(
+    guide.getByRole("heading", { name: "先把模型接上" }),
+  ).toBeVisible();
+  await guide.getByRole("button", { name: "下一步" }).click();
+  await guide.getByRole("button", { name: "下一步" }).click();
+  await expect(
+    guide.getByRole("heading", { name: "先聊起来，其他慢慢调" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("welcome-step3.png"),
+    animations: "disabled",
+  });
+  await guide.getByRole("button", { name: "开始配置 API" }).click();
+  await expect(page).toHaveURL(`${origin}/workspace/models`);
+  await expect(guide).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "模型连接", exact: true }),
+  ).toBeVisible();
+  await expect(guide).toHaveCount(0);
+  expect(saved).toHaveLength(0);
+  expect(mutations).toHaveLength(0);
+});
+
+test("welcome guide can be skipped, reopened from help and dismissed with Escape", async ({
+  page,
+}) => {
+  await setup(page, true);
+  await page.goto(`${origin}/workspace`);
+  await page.getByRole("button", { name: "跳过指引" }).click();
+  await page.reload();
+  await expect(page.getByRole("link", { name: "模型连接" })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "使用说明", exact: true })
+    .filter({ visible: true })
+    .click();
+  await page.getByRole("button", { name: "重新查看新手指引" }).click();
+  await expect(
+    page.getByRole("heading", { name: "先把模型接上" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("link", { name: "模型连接" }).click();
+  await expect(page).toHaveURL(`${origin}/workspace/models`);
+});
+
+test("welcome guide remains usable on a narrow screen and without local storage", async ({
+  page,
+}, testInfo) => {
+  await setup(page, true);
+  await page.setViewportSize({ width: 390, height: 680 });
+  await page.addInitScript(() => {
+    Storage.prototype.getItem = () => {
+      throw new Error("storage unavailable");
+    };
+    Storage.prototype.setItem = () => {
+      throw new Error("storage unavailable");
+    };
+  });
+  await page.goto(`${origin}/workspace`);
+  await expect(
+    page.getByRole("heading", { name: "先把模型接上" }),
+  ).toBeVisible();
+  const button = page.getByRole("button", { name: "下一步" });
+  await expect(button).toBeInViewport();
+  await page.screenshot({
+    path: testInfo.outputPath("welcome-narrow.png"),
+    animations: "disabled",
+  });
+  await button.click();
+  await expect(
+    page.getByRole("heading", { name: "拿起手机，扫码连接" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
