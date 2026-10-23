@@ -13,6 +13,7 @@ import {
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ConnectionScene } from "../components/bridge/connection-scene";
+import { DiagnosticsButton } from "../components/bridge/diagnostics-button";
 import { WhaleCompanion } from "../components/bridge/whale-companion";
 import { useBridgeStatus } from "../hooks/use-bridge-status";
 
@@ -66,13 +67,13 @@ export function HomePage() {
     <div className="bridge-page bridge-overview">
       <header className="bridge-page-heading">
         <div>
-          <span className="bridge-eyebrow">A LITTLE CLOSER, EVERY DAY</span>
-          <h1>让 AI，融入日常。</h1>
-          <p>从配置到对话，每一步都在这里。</p>
+          <span className="bridge-eyebrow">微信 AI 接入助手</span>
+          <h1>连接总览</h1>
+          <p>查看模型、微信连接和自动回复状态。</p>
         </div>
         <span className="bridge-edition">
           <span />
-          你的私人工作空间
+          本机运行
         </span>
       </header>
       <div className="bridge-overview-grid">
@@ -104,15 +105,15 @@ export function HomePage() {
               </>
             ) : modelConfigured ? (
               <>
-                你的 AI，
+                模型已配置，
                 <br />
-                <em>只差一步。</em>
+                <em>接下来连接微信。</em>
               </>
             ) : (
               <>
-                喜欢的 AI，
+                填写 API，
                 <br />
-                <em>熟悉的微信。</em>
+                <em>连接微信。</em>
               </>
             )}
           </h2>
@@ -125,14 +126,11 @@ export function HomePage() {
                   ? "模型与微信已准备好。打开手机里的助手对话，随时开始。"
                   : modelConfigured
                     ? "模型配置已保存。前往微信连接，用手机扫码完成授权。"
-                    : "使用自己的 API，把你喜欢的模型带进每天都在用的微信。"}
+                    : "先填写模型服务商提供的 API Key，再用微信扫码授权。"}
           </p>
           <div className="bridge-overview-action">
             {needsRecovery ? (
-              <button className="bridge-button" type="button" onClick={recheck}>
-                重新检查服务
-                <RefreshCw size={16} />
-              </button>
+              <DiagnosticsButton prominent />
             ) : (
               <Link
                 className="bridge-button"
@@ -159,16 +157,14 @@ export function HomePage() {
           <ConnectionScene />
           <div className="bridge-whale-hero">
             <WhaleCompanion />
-            <span>今天，也要好好吃饭。</span>
+            <span>大肥鱼：配好 API，微信见。</span>
           </div>
-          <span className="bridge-overview-signature">
-            YOUR AI. YOUR WECHAT.
-          </span>
+          <span className="bridge-overview-signature">API 自备 · 本机运行</span>
         </section>
         <section className="bridge-panel bridge-journey" aria-label="接入步骤">
           <div className="bridge-journey-title">
-            <span className="bridge-eyebrow">YOUR CONNECTION</span>
-            <h2>连接，一目了然。</h2>
+            <span className="bridge-eyebrow">配置进度</span>
+            <h2>接入步骤</h2>
           </div>
           <Link to="/workspace/models" className="bridge-journey-step">
             <span className="bridge-journey-number">
@@ -249,7 +245,7 @@ export function HomePage() {
             <p>
               {paused
                 ? "暂停期间的新消息会被忽略。"
-                : "开启后处理新消息；暂停不影响已开始的回复。"}
+                : "开启后处理新消息；暂停会停止尚未发出的回复。"}
             </p>
             {pause.isError && <p role="alert">操作失败，请重试。</p>}
           </div>
@@ -274,8 +270,8 @@ export function HomePage() {
             <Sparkles size={21} />
           </span>
           <div>
-            <h2>回答，也可以很像你。</h2>
-            <p>用自己的话，定义 AI 的回答风格。</p>
+            <h2>回答风格</h2>
+            <p>默认大肥鱼，可编辑预设或关闭人设。</p>
           </div>
           <ArrowUpRight size={19} />
         </Link>

@@ -1,9 +1,11 @@
 import type { WeixinMessage } from "../api/types.js";
+import { incomingWaitMs } from "./bridge-incoming-rhythm.js";
 
 type Batch = {
   messages: WeixinMessage[];
   text: string[];
   started: number;
+  lastAdded: number;
   version: string;
   timer: ReturnType<typeof setTimeout>;
 };
@@ -18,6 +20,7 @@ export class BridgeInbox {
   constructor(
     private options: {
       waitMs: () => number;
+      automatic?: () => boolean;
       version: () => string;
       paused: () => boolean;
       run: (message: WeixinMessage, valid: () => boolean) => Promise<unknown>;
@@ -64,7 +67,13 @@ export class BridgeInbox {
     const peer = message.from_user_id ?? "";
     const items = message.item_list;
     const text = items?.[0]?.text_item?.text;
-    const waitMs = this.options.waitMs();
+    const automatic = this.options.automatic?.() === true;
+    const now = Date.now();
+    const previousBatch = this.pending.get(peer);
+    const waitMs = automatic
+      ? incomingWaitMs(text ?? "", previousBatch ? now - previousBatch.lastAdded : undefined)
+      : this.options.waitMs();
+    const maxWaitMs = automatic ? 20000 : 90000;
     const version = this.options.version();
     const mergeable =
       peer &&
@@ -96,15 +105,17 @@ export class BridgeInbox {
       clearTimeout(batch.timer);
       batch.messages.push(message);
       batch.text.push(text);
+      batch.lastAdded = now;
       batch.timer = setTimeout(
         () => this.flush(peer),
-        Math.max(0, Math.min(waitMs, 90000 - (Date.now() - batch.started))),
+        Math.max(0, Math.min(waitMs, maxWaitMs - (now - batch.started))),
       );
     } else {
       this.pending.set(peer, {
         messages: [message],
         text: [text],
-        started: Date.now(),
+        started: now,
+        lastAdded: now,
         version,
         timer: setTimeout(() => this.flush(peer), waitMs),
       });

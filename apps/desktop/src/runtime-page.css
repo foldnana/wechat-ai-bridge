@@ -1598,8 +1598,8 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f6f8f3;
-  color: #214e3b;
+  background: #f3f7fc;
+  color: #213e64;
   z-index: 10;
 }
 
@@ -1629,7 +1629,7 @@ body,
   width: 62px;
   height: 62px;
   margin-bottom: 16px;
-  color: #286148;
+  color: #2b62bc;
 }
 
 .bridge-startup-mark svg {
@@ -1641,8 +1641,8 @@ body,
   content: "";
   position: absolute;
   inset: -6px;
-  border: 1px solid #d9e5d9;
-  border-top-color: #286148;
+  border: 1px solid #dbe7f4;
+  border-top-color: #2b62bc;
   border-radius: 50%;
   animation: bridge-startup-spin 1.2s linear infinite;
 }
@@ -1661,7 +1661,7 @@ body,
 
 .bridge-startup-state p {
   margin: 0;
-  color: #63776a;
+  color: #60748c;
   font-size: 13px;
   line-height: 1.8;
 }
@@ -1670,7 +1670,7 @@ body,
   margin-top: 18px;
   padding: 9px 16px;
   color: #fff;
-  background: #214e3b;
+  background: #2b62bc;
   border: 0;
   border-radius: 8px;
   cursor: pointer;

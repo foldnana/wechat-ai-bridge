@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -92,7 +92,10 @@ afterEach(async () => {
     dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
   );
 });
-async function harness(text: string, beforeDelivery = () => {}) {
+async function harness(
+  text: string,
+  beforeDelivery: () => void | Promise<void> = () => {},
+) {
   const root = await mkdtemp(path.join(os.tmpdir(), "bridge-delivery-"));
   dirs.push(root);
   vi.stubEnv("OPENCLAW_STATE_DIR", root);
@@ -138,7 +141,7 @@ async function harness(text: string, beforeDelivery = () => {}) {
         withReplyDispatcher: async ({ run }: { run: () => Promise<void> }) =>
           run(),
         dispatchReplyFromConfig: async () => {
-          beforeDelivery();
+          await beforeDelivery();
           await deliver({ text });
         },
       },
@@ -152,6 +155,104 @@ async function harness(text: string, beforeDelivery = () => {}) {
   return { root, deps, full };
 }
 describe("behavior settings in the actual reply delivery path", () => {
+  it("keeps a generated reply when only the local contact label changes", async () => {
+    let edit = async () => {};
+    const f = await harness("正常回答。", () => edit());
+    const id = bridgeHash(`${f.deps.accountId}\0test-peer`);
+    await saveContactProfile(
+      f.root,
+      id,
+      contactSettingsSchema.parse({ label: "旧备注" }),
+    );
+    edit = async () => {
+      await saveContactProfile(
+        f.root,
+        id,
+        contactSettingsSchema.parse({ label: "新备注" }),
+      );
+    };
+    expect(await processOneMessage(f.full, f.deps)).toBe(true);
+    expect(calls.text).toHaveBeenCalledOnce();
+  });
+  it("records context-change cancellation instead of leaving the reply processing forever", async () => {
+    let edit = async () => {};
+    const f = await harness("旧资料生成的回答", () => edit());
+    edit = async () => {
+      await saveContactProfile(
+        f.root,
+        bridgeHash(`${f.deps.accountId}\0test-peer`),
+        contactSettingsSchema.parse({ nickname: "新称呼" }),
+      );
+    };
+    expect(await processOneMessage(f.full, f.deps)).toBe(false);
+    expect(calls.text).not.toHaveBeenCalled();
+    const activity = JSON.parse(
+      await readFile(
+        path.join(
+          f.root,
+          "bridge-activity",
+          `${bridgeHash(f.deps.accountId)}.json`,
+        ),
+        "utf8",
+      ),
+    );
+    expect(activity).toMatchObject({
+      cancelled: true,
+      error: null,
+      sentAt: null,
+    });
+  });
+  it("preserves successful text when an optional sticker upload fails", async () => {
+    const id = randomUUID();
+    const f = await harness(`正常回答 [[sticker:${id}]]`);
+    await writeBridgeJson(f.root, "bridge-behavior.json", {
+      ...behaviorSchema.parse({
+        stickers: { enabled: true, probability: 100 },
+      }),
+      accountHashes: [],
+    });
+    await writeBridgeJson(f.root, "bridge-stickers.json", [
+      { id, label: "开心", tags: "开心", extension: "png" },
+    ]);
+    calls.media.mockRejectedValueOnce(new Error("CDN upload failed"));
+    expect(await processOneMessage(f.full, f.deps)).toBe(true);
+    expect(calls.text).toHaveBeenCalledOnce();
+    expect(calls.notice).not.toHaveBeenCalled();
+    const activity = JSON.parse(
+      await readFile(
+        path.join(
+          f.root,
+          "bridge-activity",
+          `${bridgeHash(f.deps.accountId)}.json`,
+        ),
+        "utf8",
+      ),
+    );
+    expect(activity).toMatchObject({
+      error: null,
+      warning: "sticker",
+      sentAt: expect.any(String),
+      lastSuccessfulReplyAt: expect.any(String),
+    });
+  });
+  it("still fails when the only reply is an image and its upload fails", async () => {
+    const id = randomUUID();
+    const f = await harness(`[[sticker:${id}]]`);
+    await writeBridgeJson(f.root, "bridge-behavior.json", {
+      ...behaviorSchema.parse({
+        stickers: { enabled: true, probability: 100 },
+      }),
+      accountHashes: [],
+    });
+    await writeBridgeJson(f.root, "bridge-stickers.json", [
+      { id, label: "开心", tags: "开心", extension: "png" },
+    ]);
+    calls.media.mockRejectedValueOnce(new Error("CDN upload failed"));
+    await expect(processOneMessage(f.full, f.deps)).rejects.toThrow(
+      "CDN upload failed",
+    );
+    expect(calls.text).not.toHaveBeenCalled();
+  });
   it("cancels remaining bubbles if contact memories are cleared during a reply", async () => {
     const f = await harness("终于可以喘一口气了。今天真的辛苦你啦！");
     const id = bridgeHash(`${f.deps.accountId}\0test-peer`);

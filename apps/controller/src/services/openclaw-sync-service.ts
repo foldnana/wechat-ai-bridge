@@ -3,6 +3,10 @@ import { selectPreferredModel } from "@nexu/shared";
 import type { ControllerEnv } from "../app/env.js";
 import { logger } from "../lib/logger.js";
 import {
+  buildProviderRuntimeModelId,
+  listModelProviderRuntimeDescriptors,
+} from "../lib/model-provider-runtime.js";
+import {
   type OAuthConnectionState,
   compileOpenClawConfig,
   resolveModelId,
@@ -20,6 +24,10 @@ import type { WorkspaceTemplateWriter } from "../runtime/workspace-template-writ
 import type { CompiledOpenClawStore } from "../store/compiled-openclaw-store.js";
 import type { NexuConfigStore } from "../store/nexu-config-store.js";
 import type { NexuConfig } from "../store/schemas.js";
+import {
+  defaultBridgeModelOptions,
+  savedModelOptions,
+} from "./bridge-model-options.js";
 import type { OpenClawGatewayService } from "./openclaw-gateway-service.js";
 
 function resolvePrimaryModelRef(
@@ -338,6 +346,21 @@ export class OpenClawSyncService {
         Object.fromEntries(
           config.bots.map((bot) => [bot.id, bot.systemPrompt ?? ""]),
         ),
+        listModelProviderRuntimeDescriptors(config)
+          .filter(
+            (item) =>
+              item.provider.enabled && item.apiKind === "openai-completions",
+          )
+          .flatMap((item) =>
+            item.provider.models.map((model) => ({
+              provider: item.runtimeKey,
+              model: buildProviderRuntimeModelId(item, model.id),
+              baseUrl: item.provider.baseUrl,
+              options:
+                savedModelOptions(item.provider)[model.id] ??
+                defaultBridgeModelOptions,
+            })),
+          ),
       );
     } else {
       // TODO(alche): This writes `noModelMessage` into the runtime-model state

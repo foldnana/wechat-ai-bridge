@@ -1,5 +1,54 @@
 import { z } from "zod";
 
+/** Public config placeholder: round-trip to retain this provider's local key. */
+export const SAVED_PROVIDER_API_KEY = "__BRIDGE_SAVED_API_KEY__";
+
+export function redactModelProviderApiKeys(
+  config: PersistedModelsConfig,
+): PersistedModelsConfig {
+  return {
+    ...config,
+    providers: Object.fromEntries(
+      Object.entries(config.providers).map(([id, provider]) => [
+        id,
+        {
+          ...provider,
+          ...(provider.apiKey ? { apiKey: SAVED_PROVIDER_API_KEY } : {}),
+        },
+      ]),
+    ),
+  };
+}
+
+export class SavedProviderApiKeyError extends Error {
+  constructor() {
+    super("已保存的密钥不可用于新的连接地址，请重新填写 API Key。");
+  }
+}
+
+export function restoreModelProviderApiKeys(
+  incoming: PersistedModelsConfig,
+  stored: PersistedModelsConfig,
+): PersistedModelsConfig {
+  return {
+    ...incoming,
+    providers: Object.fromEntries(
+      Object.entries(incoming.providers).map(([id, provider]) => {
+        if (provider.apiKey !== SAVED_PROVIDER_API_KEY) return [id, provider];
+        const existing = stored.providers[id];
+        if (
+          !existing?.apiKey ||
+          existing.apiKey === SAVED_PROVIDER_API_KEY ||
+          existing.baseUrl !== provider.baseUrl
+        ) {
+          throw new SavedProviderApiKeyError();
+        }
+        return [id, { ...provider, apiKey: existing.apiKey }];
+      }),
+    ),
+  };
+}
+
 export const persistedProviderAuthModeSchema = z.enum([
   "api-key",
   "aws-sdk",

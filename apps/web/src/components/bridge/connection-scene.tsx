@@ -54,7 +54,7 @@ export function ConnectionScene() {
       </div>
       <span className="scene-spark scene-spark-one" />
       <span className="scene-spark scene-spark-two" />
-      <span className="scene-caption">灵感与日常，从此相连</span>
+      <span className="scene-caption">模型 API → 本机程序 → 微信</span>
     </div>
   );
 }

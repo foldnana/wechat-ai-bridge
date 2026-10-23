@@ -1,7 +1,11 @@
+import type { BridgeDiagnosis } from "./bridge-diagnosis";
 import type { DesktopBuildInfo, DesktopRuntimeConfig } from "./runtime-config";
+export type { BridgeDiagnosis } from "./bridge-diagnosis";
 export type { DesktopBuildInfo, DesktopRuntimeConfig } from "./runtime-config";
 
 export const hostInvokeChannels = [
+  "bridge:diagnose",
+  "bridge:retry",
   "app:get-info",
   "diagnostics:get-info",
   "diagnostics:crash-main",
@@ -68,6 +72,8 @@ export type StartupProbePayload = {
 };
 
 export type HostInvokePayloadMap = {
+  "bridge:diagnose": undefined;
+  "bridge:retry": undefined;
   "app:get-info": undefined;
   "diagnostics:get-info": undefined;
   "diagnostics:crash-main": undefined;
@@ -116,6 +122,8 @@ export type HostInvokePayloadMap = {
 };
 
 export type HostInvokeResultMap = {
+  "bridge:diagnose": BridgeDiagnosis;
+  "bridge:retry": BridgeDiagnosis;
   "app:get-info": AppInfo;
   "diagnostics:get-info": DiagnosticsInfo;
   "diagnostics:crash-main": undefined;

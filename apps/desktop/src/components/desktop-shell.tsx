@@ -72,7 +72,9 @@ export function DesktopShell() {
           : "desktop-shell"
       }
     >
-      <div className="window-drag-bar" />
+      {!navigator.userAgent.includes("Windows") && (
+        <div className="window-drag-bar" />
+      )}
       <aside className="desktop-sidebar">
         <div className="desktop-sidebar-brand">
           <span className="desktop-shell-eyebrow">nexu desktop</span>

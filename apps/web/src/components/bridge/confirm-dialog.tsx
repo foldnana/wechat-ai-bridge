@@ -26,7 +26,7 @@ export function BridgeConfirmDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bridge-dialog">
-        <span className="bridge-eyebrow">BEFORE YOU CONTINUE</span>
+        <span className="bridge-eyebrow">确认操作</span>
         <DialogTitle className="bridge-dialog-title">{title}</DialogTitle>
         <DialogDescription className="bridge-dialog-description">
           {description}

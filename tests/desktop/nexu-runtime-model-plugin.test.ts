@@ -119,6 +119,10 @@ describe("nexu-runtime-model plugin", () => {
       expect(disabled).not.toContain(WHALE_PERSONA);
       expect(disabled).not.toContain("不要使用 Unicode emoji。");
       await writer.write("openai/gpt-4.1");
+      await unlink(behaviorFile);
+      expect(
+        (await handler?.({}, { agentId: "bot" }))?.prependSystemContext,
+      ).toContain(WHALE_PERSONA);
       await writeFile(behaviorFile, JSON.stringify({ persona: "auto" }));
       expect(
         (await handler?.({}, { agentId: "bot" }))?.prependSystemContext,

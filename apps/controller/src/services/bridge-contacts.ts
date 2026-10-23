@@ -22,6 +22,7 @@ export const contactSettingsSchema = z.object({
 });
 export const contactProfileSchema = z.object({
   revision: z.string().min(1).max(80),
+  replyRevision: z.string().min(1).max(80).optional(),
   settings: contactSettingsSchema,
 });
 export async function readContact(root: string, id: string) {
@@ -58,9 +59,25 @@ export async function saveContactProfile(
   root: string,
   id: string,
   settings: z.infer<typeof contactSettingsSchema>,
+  invalidateReply = false,
 ) {
   contactIdSchema.parse(id);
-  const profile = { revision: randomUUID(), settings };
+  const previous = await readContactProfile(root, id);
+  const context = (s: z.infer<typeof contactSettingsSchema>) =>
+    JSON.stringify([
+      s.nickname,
+      s.relationship,
+      s.instructions,
+      s.memoryEnabled,
+      s.memoryEnabled ? s.memories : [],
+    ]);
+  // Edit revisions protect concurrent writes; reply revisions only invalidate
+  // content that may now be stale. Local labels never cancel a reply.
+  const replyRevision =
+    invalidateReply || context(previous.settings) !== context(settings)
+      ? randomUUID()
+      : (previous.replyRevision ?? previous.revision);
+  const profile = { revision: randomUUID(), replyRevision, settings };
   await writeBridgeJson(
     path.join(root, "bridge-contact-profiles"),
     `${id}.json`,

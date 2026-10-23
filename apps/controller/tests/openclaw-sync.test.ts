@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { modelProviderConfigSchema } from "@nexu/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ControllerEnv } from "../src/app/env.js";
 import type { compileOpenClawConfig } from "../src/lib/openclaw-config-compiler.js";
@@ -120,8 +121,43 @@ describe("OpenClawSyncService", () => {
     await mkdir(env.platformTemplatesDir, { recursive: true });
     await writeFile(path.join(env.platformTemplatesDir, "AGENTS.md"), "hello");
     await syncService.writePlatformTemplatesForBot(bot.id);
+    const options = { thinking: "auto", timeoutSeconds: 120, retries: 0 };
+    await configStore.saveProviderAndSelectModel(
+      "custom-openai/bridge",
+      modelProviderConfigSchema.parse({
+        providerTemplateId: "custom-openai",
+        instanceId: "bridge",
+        api: "openai-completions",
+        apiKey: "synthetic-key",
+        baseUrl: "https://api.example.invalid/v1",
+        models: [
+          { id: "synthetic-model", name: "Synthetic" },
+          { id: "legacy-model", name: "Legacy" },
+        ],
+        metadata: { bridgeModelOptions: { "synthetic-model": options } },
+      }),
+      "custom-openai/bridge/synthetic-model",
+    );
 
     await syncService.syncAll();
+    const runtimeState = JSON.parse(
+      await readFile(env.openclawRuntimeModelStatePath, "utf8"),
+    );
+    expect(runtimeState.requestOptions).toEqual([
+      {
+        provider: "custom-openai__bridge",
+        model: "synthetic-model",
+        baseUrl: "https://api.example.invalid/v1",
+        options,
+      },
+      {
+        provider: "custom-openai__bridge",
+        model: "legacy-model",
+        baseUrl: "https://api.example.invalid/v1",
+        options: { thinking: "auto", timeoutSeconds: 90, retries: 1 },
+      },
+    ]);
+    expect(JSON.stringify(runtimeState)).not.toContain("synthetic-key");
 
     const config = JSON.parse(
       await readFile(env.openclawConfigPath, "utf8"),

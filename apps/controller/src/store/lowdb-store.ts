@@ -10,7 +10,21 @@ export class LowDbStore<T> {
     private readonly createDefault: () => T,
   ) {}
 
-  async read(): Promise<T> {
+  read(): Promise<T> {
+    return this.enqueue(() => this.readCurrent());
+  }
+
+  // Serialize the entire read/modify/write transaction, including first-use recovery.
+  private enqueue<R>(operation: () => Promise<R>): Promise<R> {
+    const result = this.writeQueue.then(operation);
+    this.writeQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
+  private async readCurrent(): Promise<T> {
     if (this.cache !== null) {
       return this.cache;
     }
@@ -18,43 +32,54 @@ export class LowDbStore<T> {
     try {
       this.cache = await this.readAndParse(this.filePath);
       return this.cache;
-    } catch {
+    } catch (primaryError) {
       const backupPath = `${this.filePath}.bak`;
+      let recovered: T;
       try {
-        this.cache = await this.readAndParse(backupPath);
-        await this.write(this.cache);
-        return this.cache;
-      } catch {
-        const fallback = this.createDefault();
-        this.cache = this.schema.parse(fallback);
-        await this.write(this.cache);
-        return this.cache;
+        recovered = await this.readAndParse(backupPath);
+      } catch (backupError) {
+        if (
+          (primaryError as NodeJS.ErrnoException).code !== "ENOENT" ||
+          (backupError as NodeJS.ErrnoException).code !== "ENOENT"
+        ) {
+          throw new Error(
+            "本机配置及备份无法读取，已保留原文件。请检查磁盘、目录权限或恢复有效备份。",
+          );
+        }
+        recovered = this.createDefault();
       }
+      const validated = this.schema.parse(recovered);
+      await this.persist(validated);
+      return validated;
     }
   }
 
   async write(nextValue: T): Promise<void> {
     const validated = this.schema.parse(nextValue);
 
-    this.writeQueue = this.writeQueue.then(async () => {
-      await mkdir(path.dirname(this.filePath), { recursive: true });
-      const tempPath = `${this.filePath}.tmp`;
-      const backupPath = `${this.filePath}.bak`;
-      const payload = `${JSON.stringify(validated, null, 2)}\n`;
-      await writeFile(tempPath, payload, "utf8");
-      await writeFile(backupPath, payload, "utf8");
-      await rename(tempPath, this.filePath);
-      this.cache = validated;
-    });
-
-    await this.writeQueue;
+    await this.enqueue(() => this.persist(validated));
   }
 
   async update(updater: (current: T) => T | Promise<T>): Promise<T> {
-    const current = await this.read();
-    const nextValue = await updater(current);
-    await this.write(nextValue);
-    return nextValue;
+    return this.enqueue(async () => {
+      const current = await this.readCurrent();
+      const nextValue = this.schema.parse(
+        await updater(structuredClone(current)),
+      );
+      await this.persist(nextValue);
+      return nextValue;
+    });
+  }
+
+  private async persist(validated: T): Promise<void> {
+    await mkdir(path.dirname(this.filePath), { recursive: true });
+    const tempPath = `${this.filePath}.tmp`;
+    const backupPath = `${this.filePath}.bak`;
+    const payload = `${JSON.stringify(validated, null, 2)}\n`;
+    await writeFile(tempPath, payload, "utf8");
+    await writeFile(backupPath, payload, "utf8");
+    await rename(tempPath, this.filePath);
+    this.cache = validated;
   }
 
   private async readAndParse(filePath: string): Promise<T> {

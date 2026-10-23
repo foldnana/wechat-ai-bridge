@@ -5,6 +5,8 @@ import {
   type ModelProviderConfig,
   type PersistedModelsConfig,
   type ProviderRegistryEntryDto,
+  SAVED_PROVIDER_API_KEY,
+  SavedProviderApiKeyError,
   getBundledProviderModelIds,
   getDefaultProviderBaseUrls,
   getProviderRuntimePolicy,
@@ -503,8 +505,16 @@ export class ModelProviderService {
       return { valid: false, error: "Unsupported provider" };
     }
 
+    if (
+      input.apiKey === SAVED_PROVIDER_API_KEY &&
+      (!storedProvider?.apiKey ||
+        (input.baseUrl !== undefined &&
+          input.baseUrl !== storedProvider.baseUrl))
+    ) {
+      return { valid: false, error: new SavedProviderApiKeyError().message };
+    }
     const apiKey =
-      input.apiKey !== undefined
+      input.apiKey !== undefined && input.apiKey !== SAVED_PROVIDER_API_KEY
         ? input.apiKey.trim()
         : storedProvider?.apiKey || "";
     const defaultBaseUrl =

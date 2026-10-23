@@ -1121,7 +1121,9 @@ function DesktopShell() {
           : "desktop-shell"
       }
     >
-      <div className="window-drag-bar" />
+      {!navigator.userAgent.includes("Windows") && (
+        <div className="window-drag-bar" />
+      )}
       <aside className="desktop-sidebar">
         <div className="desktop-sidebar-brand">
           <div className="desktop-sidebar-brand-top">

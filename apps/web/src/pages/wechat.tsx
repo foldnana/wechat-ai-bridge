@@ -52,8 +52,8 @@ export function WechatPage() {
     <div className="bridge-page bridge-wechat-page">
       <header className="bridge-page-heading">
         <div>
-          <span className="bridge-eyebrow">02 / CONNECT YOUR WECHAT</span>
-          <h1>下一站，你的微信。</h1>
+          <span className="bridge-eyebrow">第 2 步 · 扫码授权</span>
+          <h1>微信连接</h1>
           <p>用手机微信授权，连接个人微信 ClawBot。</p>
         </div>
         <Link className="bridge-back-link" to="/workspace/models">
@@ -115,8 +115,8 @@ export function WechatPage() {
             <MessageCircle size={62} strokeWidth={1.1} />
           </div>
           <div className="bridge-connected-copy">
-            <span className="bridge-eyebrow">CONNECTED TO YOUR EVERYDAY</span>
-            <h2>{accountReady ? "微信，已连接。" : "授权已保存。"}</h2>
+            <span className="bridge-eyebrow">授权状态</span>
+            <h2>{accountReady ? "微信已连接" : "授权已保存"}</h2>
             <p>
               {state.serviceError || state.environmentUnavailable
                 ? "本地服务需要检查，恢复后会自动更新连接状态。"
@@ -178,7 +178,7 @@ export function WechatPage() {
         <MessageCircle size={18} />
         <div>
           <strong>
-            第一声「你好」，由你决定。 <span>可选试聊</span>
+            发送测试消息 <span>可选，不影响配置完成</span>
           </strong>
           <p>{SUGGESTED_MESSAGE}</p>
         </div>

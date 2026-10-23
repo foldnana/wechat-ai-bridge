@@ -17,6 +17,7 @@ import type { DesktopRuntimeConfig } from "../shared/runtime-config";
 import type { DesktopDiagnosticsReporter } from "./desktop-diagnostics";
 import { exportDiagnostics } from "./diagnostics-export";
 import type { RuntimeOrchestrator } from "./runtime/daemon-supervisor";
+import { createBridgeRecovery } from "./services/bridge-recovery";
 import {
   getDesktopShellPreferences,
   updateDesktopShellPreferences,
@@ -385,6 +386,11 @@ export function registerIpcHandlers(
 ): void {
   ensureDesktopDevRendererLogTracking();
 
+  const bridgeRecovery = createBridgeRecovery(
+    orchestrator,
+    runtimeConfig.urls.controllerBase,
+  );
+
   orchestrator.subscribe((runtimeEvent) => {
     for (const window of BrowserWindow.getAllWindows()) {
       window.webContents.send("host:runtime-event", runtimeEvent);
@@ -397,6 +403,10 @@ export function registerIpcHandlers(
       assertValidChannel(channel);
 
       switch (channel) {
+        case "bridge:diagnose":
+          return bridgeRecovery.diagnose();
+        case "bridge:retry":
+          return bridgeRecovery.retry();
         case "app:get-info": {
           const result: HostInvokeResultMap["app:get-info"] = {
             appName: app.getName(),

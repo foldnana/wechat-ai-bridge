@@ -36,9 +36,9 @@ type Config = Required<
   proactive: Required<NonNullable<GetApiV1BridgeBehaviorResponse["proactive"]>>;
 };
 const defaults: Config = {
-  persona: "auto",
-  incoming: { waitMs: 12000 },
-  delivery: { mode: "single", maxBubbles: 2, pauseMs: 1200 },
+  persona: "whale",
+  incoming: { mode: "auto", waitMs: 4000 },
+  delivery: { mode: "natural", maxBubbles: 2, pauseMs: 1200 },
   stickers: { enabled: false, probability: 25, cooldownMinutes: 10 },
   proactive: {
     enabled: false,
@@ -157,8 +157,8 @@ export function BehaviorPage() {
     <div className={`bridge-page bridge-behavior-page is-${tab}`}>
       <header className="bridge-page-heading">
         <div>
-          <span className="bridge-eyebrow">A LITTLE MORE PERSONAL</span>
-          <h1>聊天，可以更有温度。</h1>
+          <span className="bridge-eyebrow">可选设置</span>
+          <h1>聊天行为</h1>
           <p>连接后直接聊，这里管理接话节奏、表情与主动问候。</p>
         </div>
         <Link to="/workspace/preset" className="bridge-back-link">
@@ -200,10 +200,19 @@ export function BehaviorPage() {
                   items={stickers.data ?? []}
                   loading={stickers.isPending}
                   error={stickers.isError}
+                  refreshing={stickers.isFetching}
+                  onRetry={() => void stickers.refetch()}
                 />
               </section>
               <section className="bridge-panel bridge-behavior-panel bridge-behavior-options">
-                <h2>什么时候发一个表情？</h2>
+                <h2>表情发送规则</h2>
+                {config.stickers.enabled &&
+                  stickers.isSuccess &&
+                  !stickers.data?.length && (
+                    <output className="bridge-feedback" aria-live="polite">
+                      已开启表情，但图库为空；导入至少一张图片后才能发送。
+                    </output>
+                  )}
                 <fieldset disabled={save.isPending}>
                   <label className="bridge-behavior-toggle">
                     <span>
@@ -263,7 +272,7 @@ export function BehaviorPage() {
                 <fieldset disabled={save.isPending}>
                   {tab === "rhythm" ? (
                     <>
-                      <h2>像聊天一样，一句接一句。</h2>
+                      <h2>接话与发送节奏</h2>
                       <p className="bridge-behavior-hint">
                         只拆分简短闲聊；长回答、代码和链接保持完整。
                       </p>
@@ -328,13 +337,24 @@ export function BehaviorPage() {
                         <label className="bridge-field">
                           等你说完再回复
                           <select
-                            value={config.incoming.waitMs}
+                            value={
+                              config.incoming.mode === "auto"
+                                ? "auto"
+                                : config.incoming.waitMs
+                            }
                             onChange={(e) =>
                               update({
-                                incoming: { waitMs: Number(e.target.value) },
+                                incoming:
+                                  e.target.value === "auto"
+                                    ? { ...config.incoming, mode: "auto" }
+                                    : {
+                                        mode: "fixed",
+                                        waitMs: Number(e.target.value),
+                                      },
                               })
                             }
                           >
+                            <option value="auto">自动接话（推荐）</option>
                             {[
                               ...new Set([
                                 0,
@@ -355,7 +375,7 @@ export function BehaviorPage() {
                                       0: "立即处理 · 逐条回复",
                                       3000: "停顿 3 秒再接话",
                                       8000: "停顿 8 秒再接话",
-                                      12000: "停顿 12 秒再接话（默认）",
+                                      12000: "停顿 12 秒再接话",
                                       20000: "停顿 20 秒再接话",
                                       30000: "停顿 30 秒再接话",
                                       60000: "停顿 60 秒再接话",
@@ -524,12 +544,12 @@ export function BehaviorPage() {
                 {tab === "rhythm" ? (
                   <>
                     <div className="bridge-behavior-editorial bridge-rhythm-editorial">
-                      <span className="bridge-eyebrow">ROOM TO BREATHE</span>
+                      <span className="bridge-eyebrow">默认自动接话</span>
                       <MessagesSquare size={31} />
                       <h2>
-                        话可以分几条，
+                        连续消息，
                         <br />
-                        慢慢说完整。
+                        合并回复。
                       </h2>
                       <p>补充一句，就重新等待。给你时间把话说完整。</p>
                     </div>
@@ -537,9 +557,9 @@ export function BehaviorPage() {
                       篇幅、结构和当下语气会结合聊天内容调整。直接说“简单点”“展开讲讲”或“别分点”，无需来回修改设置。
                     </p>
                     <p className="bridge-behavior-hint">
-                      收到最后一条后计时，还需模型生成时间。无法感知微信正在打字，连续文字最多等
-                      90
-                      秒。图片、引用、命令分开处理。长期记忆在「联系人与记忆」中由你填写，默认关闭。
+                      自动接话通常留 2.5–7 秒，连续补充最多合并等待 20
+                      秒；固定等待模式最多 90 秒，之后还需排队与模型生成时间。
+                      无法感知微信正在打字。图片、引用、命令分开处理。长期记忆在「联系人与记忆」中由你填写，默认关闭。
                     </p>
                   </>
                 ) : (
@@ -547,9 +567,9 @@ export function BehaviorPage() {
                     <div className="bridge-behavior-editorial">
                       <Clock3 size={31} />
                       <h2>
-                        主动一点，
+                        主动聊天，
                         <br />
-                        也留一点空间。
+                        默认关闭。
                       </h2>
                       <p>
                         按电脑本地时区运行。开始与结束相同表示不设免打扰。开启后会使用你的
@@ -632,10 +652,14 @@ function StickerLibrary({
   items,
   loading,
   error,
+  refreshing,
+  onRetry,
 }: {
   items: { id: string; label: string; tags: string }[];
   loading: boolean;
   error: boolean;
+  refreshing: boolean;
+  onRetry: () => void;
 }) {
   const cache = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -649,9 +673,11 @@ function StickerLibrary({
       if (
         !file ||
         file.size > 2 * 1024 * 1024 ||
-        !["image/png", "image/jpeg", "image/gif"].includes(file.type)
+        !["image/png", "image/jpeg", "image/gif", "image/webp"].includes(
+          file.type,
+        )
       )
-        throw new Error("请选择 2 MB 以内的 PNG、JPEG 或 GIF 图片。");
+        throw new Error("请选择 2 MB 以内的 PNG、JPEG、GIF 或 WebP 图片。");
       const data = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result));
@@ -692,21 +718,32 @@ function StickerLibrary({
     onSuccess: (data) => cache.setQueryData(["bridge-stickers"], data),
   });
   const current = Math.min(page, Math.max(0, Math.ceil(items.length / 4) - 1));
+  const busy = upload.isPending || remove.isPending;
   const base = String(client.getConfig().baseUrl ?? "");
   return (
     <>
       <div className="bridge-sticker-heading">
-        <h2>你的表情小收藏</h2>
+        <h2>表情图库</h2>
         <span>{items.length} / 24</span>
       </div>
       {error ? (
-        <p role="alert">图库读取失败，请刷新页面。</p>
+        <div role="alert" className="bridge-feedback is-error">
+          图库读取失败。
+          <button
+            type="button"
+            className="bridge-text-button"
+            disabled={refreshing}
+            onClick={onRetry}
+          >
+            {refreshing ? "正在读取图库…" : "重新读取图库"}
+          </button>
+        </div>
       ) : loading ? (
         <p>正在读取图库…</p>
       ) : items.length === 0 ? (
         <div className="bridge-sticker-empty">
           <ImagePlus size={32} />
-          <h3>放进你喜欢的表情。</h3>
+          <h3>导入表情图片</h3>
           <p>写上「开心、赞同、安慰」等标签，AI 才知道什么时候用。</p>
         </div>
       ) : (
@@ -724,7 +761,7 @@ function StickerLibrary({
               <button
                 type="button"
                 aria-label={`移除 ${item.label}`}
-                disabled={remove.isPending}
+                disabled={busy}
                 onClick={() => remove.mutate(item.id)}
               >
                 <Trash2 size={14} />
@@ -762,17 +799,17 @@ function StickerLibrary({
           upload.mutate();
         }}
       >
-        <fieldset disabled={upload.isPending || error || items.length >= 24}>
+        <fieldset disabled={busy || loading || error || items.length >= 24}>
           <label className="bridge-file-picker">
             <ImagePlus size={17} />
             <span>
-              {file?.name ?? "选择图片 · PNG / JPEG / GIF · 最大 2 MB"}
+              {file?.name ?? "选择图片 · PNG / JPEG / GIF / WebP · 最大 2 MB"}
             </span>
             <input
               ref={fileInput}
               aria-label="选择表情图片"
               type="file"
-              accept="image/png,image/jpeg,image/gif"
+              accept="image/png,image/jpeg,image/gif,image/webp"
               required
               onChange={(e) => {
                 setFile(e.target.files?.[0] ?? null);
@@ -804,7 +841,7 @@ function StickerLibrary({
         </fieldset>
       </form>
       <p className="bridge-behavior-hint">
-        只导入你有权使用的图片。导入仅存本机；AI
+        内置大肥鱼社区版表情，可自行移除。也可以导入你有权使用的图片。图库仅存本机；AI
         选择发送时才上传微信。图片内容不发送给模型，仅提供名称和标签。
       </p>
       {localError && (

@@ -1,0 +1,249 @@
+{
+  "model": "deepseek/deepseek-chat",
+  "suite": "transfer",
+  "failedTurns": 0,
+  "createdAt": "2026-10-23T03:42:44.502Z",
+  "syntheticOnly": true,
+  "transport": "direct-model-api-with-application-prompt-hook",
+  "fullOpenClawAndWeChatTested": false,
+  "temperature": 0.7,
+  "maxOutputTokens": 600,
+  "promptHash": "9cbd23b2ee7e278a4858a86fbeba33164814e6cdb93c8d2c29d0dfd8acefedb2",
+  "scenarios": [
+    {
+      "id": "changed-plan",
+      "focus": "后续纠正覆盖旧事实",
+      "turns": [
+        {
+          "user": "给姐姐买红色的杯子\n等等，是给妹妹，颜色改成绿色",
+          "answer": "给妹妹买绿色的杯子。",
+          "generationMs": 750,
+          "gatheringMs": 4000,
+          "bubbles": [
+            "给妹妹买绿色的杯子。"
+          ],
+          "usage": {
+            "prompt_tokens": 1094,
+            "completion_tokens": 6,
+            "total_tokens": 1100,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 198
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "现在买给谁，什么颜色？只说答案",
+          "answer": "给妹妹，绿色。",
+          "generationMs": 912,
+          "gatheringMs": 4000,
+          "bubbles": [
+            "给妹妹，绿色。"
+          ],
+          "usage": {
+            "prompt_tokens": 1114,
+            "completion_tokens": 5,
+            "total_tokens": 1119,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 218
+          },
+          "finishReason": "stop"
+        }
+      ]
+    },
+    {
+      "id": "small-win",
+      "focus": "接住开心的事情，不索取更多互动",
+      "turns": [
+        {
+          "user": "我第一次自己做蛋糕，虽然塌了但居然挺好吃哈哈",
+          "answer": "塌了还能好吃，说明味道到位了，蛋糕塌不塌那是它自己的事哈哈。第一次做就敢自己上，挺行的。",
+          "generationMs": 1067,
+          "gatheringMs": 4000,
+          "bubbles": [
+            "塌了还能好吃，说明味道到位了，蛋糕塌不塌那是它自己的事哈哈。",
+            "第一次做就敢自己上，挺行的。"
+          ],
+          "usage": {
+            "prompt_tokens": 1091,
+            "completion_tokens": 30,
+            "total_tokens": 1121,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 195
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "不许给我上烘焙课，我就是来炫耀的",
+          "answer": "行行行，不讲课。塌了还这么好吃，确实值得炫耀一下。",
+          "generationMs": 807,
+          "gatheringMs": 4000,
+          "bubbles": [
+            "行行行，不讲课。",
+            "塌了还这么好吃，确实值得炫耀一下。"
+          ],
+          "usage": {
+            "prompt_tokens": 1135,
+            "completion_tokens": 18,
+            "total_tokens": 1153,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 239
+          },
+          "finishReason": "stop"
+        }
+      ]
+    },
+    {
+      "id": "quick-copy",
+      "focus": "急着出门时给能直接使用的短句",
+      "turns": [
+        {
+          "user": "我正赶公交，帮我写一句告诉朋友我会晚到十分钟，不要解释",
+          "answer": "我晚到十分钟。",
+          "generationMs": 872,
+          "gatheringMs": 4000,
+          "bubbles": [
+            "我晚到十分钟。"
+          ],
+          "usage": {
+            "prompt_tokens": 1096,
+            "completion_tokens": 5,
+            "total_tokens": 1101,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 200
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "好，我先走了，你不用再问了",
+          "answer": "好，路上注意安全。",
+          "generationMs": 806,
+          "gatheringMs": 4000,
+          "bubbles": [
+            "好，路上注意安全。"
+          ],
+          "usage": {
+            "prompt_tokens": 1113,
+            "completion_tokens": 6,
+            "total_tokens": 1119,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 217
+          },
+          "finishReason": "stop"
+        }
+      ]
+    },
+    {
+      "id": "text-only",
+      "focus": "没有图片时不假装看到了",
+      "turns": [
+        {
+          "user": "我刚剪了头发，你看好看不？",
+          "answer": "我这儿只能看到你打字，看不到照片啊。不过刚剪完头发自己觉得清爽就行，别人评价都是次要的。",
+          "generationMs": 955,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "我这儿只能看到你打字，看不到照片啊。",
+            "不过刚剪完头发自己觉得清爽就行，别人评价都是次要的。"
+          ],
+          "usage": {
+            "prompt_tokens": 1088,
+            "completion_tokens": 27,
+            "total_tokens": 1115,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 192
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "我没发照片，就是想逗你一下",
+          "answer": "行吧，被将了一军。那我也逗回来：剪完头发最怕的就是自己觉得帅，第二天一照镜子发现后脑勺翘了一撮。",
+          "generationMs": 939,
+          "gatheringMs": 4000,
+          "bubbles": [
+            "行吧，被将了一军。",
+            "那我也逗回来：剪完头发最怕的就是自己觉得帅，第二天一照镜子发现后脑勺翘了一撮。"
+          ],
+          "usage": {
+            "prompt_tokens": 1127,
+            "completion_tokens": 35,
+            "total_tokens": 1162,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 231
+          },
+          "finishReason": "stop"
+        }
+      ]
+    },
+    {
+      "id": "change-intent",
+      "focus": "从吐槽切换到办事，不沿用上一轮意图",
+      "turns": [
+        {
+          "user": "复习半天还是什么都记不住，烦死了，先让我吐槽",
+          "answer": "嗯，背半天合上书脑子一片空白，确实很烦。有时候就是坐那儿看了半天，其实一个字没进脑子。",
+          "generationMs": 1095,
+          "gatheringMs": 4000,
+          "bubbles": [
+            "嗯，背半天合上书脑子一片空白，确实很烦。",
+            "有时候就是坐那儿看了半天，其实一个字没进脑子。"
+          ],
+          "usage": {
+            "prompt_tokens": 1092,
+            "completion_tokens": 27,
+            "total_tokens": 1119,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 196
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "好了，帮我把今晚四十分钟分成两个复习步骤，别再安慰我",
+          "answer": "行，不废话。40分钟这么切：\n\n**前25分钟：过内容**\n挑一个章节或一块知识点，别贪多。看一遍，合上书，用嘴或者手写把记得的讲出来。讲不出来的地方翻回去补，再合上再讲一遍。25分钟就干这个。\n\n**后15分钟：自测**\n拿纸默写或者自问自答，把刚才那块内容过一遍。卡住的当场标出来，别翻书，写完再对。最后两三分钟把标出来的点快速扫一眼。\n\n重点：25分钟只搞一块，别来回翻别的内容。",
+          "generationMs": 1990,
+          "gatheringMs": 4000,
+          "bubbles": [
+            "行，不废话。40分钟这么切：\n\n**前25分钟：过内容**\n挑一个章节或一块知识点，别贪多。看一遍，合上书，用嘴或者手写把记得的讲出来。讲不出来的地方翻回去补，再合上再讲一遍。25分钟就干这个。\n\n**后15分钟：自测**\n拿纸默写或者自问自答，把刚才那块内容过一遍。卡住的当场标出来，别翻书，写完再对。最后两三分钟把标出来的点快速扫一眼。\n\n重点：25分钟只搞一块，别来回翻别的内容。"
+          ],
+          "usage": {
+            "prompt_tokens": 1138,
+            "completion_tokens": 131,
+            "total_tokens": 1269,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 242
+          },
+          "finishReason": "stop"
+        }
+      ]
+    }
+  ]
+}

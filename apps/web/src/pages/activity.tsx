@@ -26,8 +26,8 @@ export function ActivityPage() {
     <div className="bridge-page bridge-activity-page">
       <header className="bridge-page-heading">
         <div>
-          <span className="bridge-eyebrow">BEHIND EVERY REPLY</span>
-          <h1>每次回应，都有迹可循。</h1>
+          <span className="bridge-eyebrow">收发状态</span>
+          <h1>运行记录</h1>
           <p>查看每条连接最近一次处理状态，不记录聊天正文。</p>
         </div>
         <button
@@ -65,10 +65,8 @@ export function ActivityPage() {
             <div className="bridge-record-orbit" aria-hidden="true">
               <MessageCircle size={38} strokeWidth={1.2} />
             </div>
-            <span className="bridge-eyebrow">
-              A CONVERSATION STARTS WITH HELLO
-            </span>
-            <h3>这里，还在等第一声「你好」。</h3>
+            <span className="bridge-eyebrow">暂无处理记录</span>
+            <h3>尚未处理微信消息</h3>
             <p>去微信聊聊，收到消息、生成回答和发送的状态会显示在这里。</p>
             <Link to="/workspace/wechat" className="bridge-text-button">
               查看微信连接 <ArrowRight size={16} />
@@ -88,9 +86,11 @@ export function ActivityPage() {
                       >
                         {item.error
                           ? "需要处理"
-                          : item.sentAt
-                            ? "已发送"
-                            : "处理中"}
+                          : item.cancelled
+                            ? "已停止"
+                            : item.sentAt
+                              ? "已发送"
+                              : "处理中"}
                       </span>
                     </div>
                     <div className="bridge-record-stages">
@@ -121,6 +121,16 @@ export function ActivityPage() {
                         </div>
                       ))}
                     </div>
+                    {item.cancelled && (
+                      <p className="bridge-muted">
+                        本次回复因暂停、退出或会话设置变化已停止，已发出的内容无法撤回。
+                      </p>
+                    )}
+                    {item.warning === "sticker" && (
+                      <p className="bridge-muted">
+                        回答已发送，附带表情未发出。无需重发这条消息。
+                      </p>
+                    )}
                     {item.error && (
                       <p role="alert" className="bridge-feedback is-error">
                         {item.error === "generation"

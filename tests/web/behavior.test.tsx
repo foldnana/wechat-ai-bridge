@@ -29,7 +29,7 @@ describe("behavior settings pages", () => {
     expect(html).toContain("短句分条发送");
     expect(html).toContain("长期记忆在「联系人与记忆」中由你填写");
     expect(html).toContain("等你说完再回复");
-    expect(html).toContain('value="12000" selected=""');
+    expect(html).toContain('value="auto" selected=""');
     expect(html).toContain("无法感知微信正在打字");
     expect(html).not.toContain("让 AI 偶尔先开口");
     expect(html).toContain("无需来回修改设置");

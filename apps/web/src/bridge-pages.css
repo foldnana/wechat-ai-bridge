@@ -1,4 +1,39 @@
 /* One purpose per page. Desktop layouts fit the app window; small screens reflow. */
+.bridge-model-description {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--bridge-muted);
+}
+.bridge-model-description p {
+  margin: 3px 0;
+}
+.bridge-model-warning {
+  color: #976219;
+}
+.bridge-model-advanced {
+  border: 1px solid var(--bridge-line);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+.bridge-model-advanced summary {
+  cursor: pointer;
+}
+.bridge-model-advanced summary span {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--bridge-muted);
+}
+.bridge-model-advanced[open] summary {
+  margin-bottom: 14px;
+}
+.bridge-model-advanced label {
+  display: block;
+}
+.bridge-model-advanced select {
+  margin-top: 6px;
+  width: 100%;
+}
 .bridge-app-pages .bridge-sidebar {
   width: 202px;
   padding: 27px 16px 18px;
@@ -354,9 +389,29 @@
 .bridge-form-fields > button {
   grid-column: 1 / -1;
 }
+.bridge-model-discovery {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  font-size: 11px;
+  color: var(--bridge-muted);
+  line-height: 1.6;
+}
+.bridge-saved-model-picker {
+  margin-top: 16px;
+}
+.bridge-model-discovery > button {
+  flex-shrink: 0;
+  font-size: 12px;
+}
 .bridge-app-pages .bridge-field > label {
   font-size: 12px;
   margin-bottom: 7px;
+}
+.bridge-app-pages .bridge-field > label > .bridge-text-button {
+  padding: 0;
+  line-height: inherit;
 }
 .bridge-app-pages .bridge-field input,
 .bridge-app-pages .bridge-field select {
@@ -1104,4 +1159,42 @@
 .bridge-app-pages .bridge-settings-model .bridge-feedback {
   margin-top: 12px;
   padding: 10px 12px;
+}
+/* Diagnostic controls remain usable in the fixed-size desktop window. */
+.bridge-diagnostic-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+}
+.bridge-diagnostic-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+.bridge-diagnostic-list li span:last-child {
+  text-align: right;
+}
+.bridge-startup-timings {
+  font-size: 12px;
+}
+.bridge-startup-timings summary {
+  cursor: pointer;
+}
+.bridge-diagnostic-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bridge-diagnostics-dialog {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.bridge-diagnostics-dialog .bridge-form-disclosure {
+  margin: 12px 0 16px;
+}
+.bridge-diagnostics-dialog .bridge-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }

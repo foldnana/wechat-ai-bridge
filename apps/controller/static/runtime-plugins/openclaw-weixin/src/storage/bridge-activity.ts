@@ -11,6 +11,8 @@ type Activity = {
   lastSuccessfulReplyAt: string | null;
   error: "generation" | "send" | null;
   trigger?: "proactive";
+  cancelled?: boolean;
+  warning?: "sticker";
 };
 const latest = new Map<string, Activity>();
 
@@ -54,6 +56,14 @@ export function beginBridgeActivity(accountId: string, proactive = false) {
   };
   persist();
   return {
+    cancelled() {
+      activity.cancelled = true;
+      persist();
+    },
+    stickerFailed() {
+      activity.warning = "sticker";
+      persist();
+    },
     generated() {
       activity.generatedAt = new Date().toISOString();
       persist();

@@ -1,5 +1,6 @@
 import { type OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
+  SavedProviderApiKeyError,
   isCustomProviderTemplate,
   isSupportedByokProviderId,
   minimaxOauthCancelResponseSchema,
@@ -10,11 +11,13 @@ import {
   modelProviderConfigDocumentEnvelopeSchema,
   persistedModelsConfigSchema,
   providerRegistryResponseSchema,
+  redactModelProviderApiKeys,
   supportedByokProviderIds,
   validateProviderInstanceBodySchema,
   verifyProviderBodySchema,
   verifyProviderResponseSchema,
 } from "@nexu/shared";
+import { HTTPException } from "hono/http-exception";
 import type { ControllerContainer } from "../app/container.js";
 import type { ControllerBindings } from "../types.js";
 
@@ -94,8 +97,9 @@ export function registerModelRoutes(
     async (c) =>
       c.json(
         {
-          config:
+          config: redactModelProviderApiKeys(
             await container.modelProviderService.getModelProviderConfigDocument(),
+          ),
         },
         200,
       ),
@@ -120,17 +124,25 @@ export function registerModelRoutes(
               schema: modelProviderConfigDocumentEnvelopeSchema,
             },
           },
-          description: "Updated model provider config document",
+          description:
+            "Updated model provider config document (API keys masked)",
+        },
+        400: {
+          description: "Saved API key missing or connection address changed",
         },
       },
     }),
     async (c) => {
       const beforeInventory =
         await container.modelProviderService.getInventoryStatus();
-      const config =
-        await container.modelProviderService.setModelProviderConfigDocument(
-          c.req.valid("json"),
-        );
+      const config = await container.modelProviderService
+        .setModelProviderConfigDocument(c.req.valid("json"))
+        .catch((error: unknown) => {
+          if (error instanceof SavedProviderApiKeyError) {
+            throw new HTTPException(400, { message: error.message });
+          }
+          throw error;
+        });
       const afterInventory =
         await container.modelProviderService.getInventoryStatus();
       if (
@@ -139,7 +151,7 @@ export function registerModelRoutes(
       ) {
         await container.desktopLocalService.restartRuntime();
       }
-      return c.json({ config }, 200);
+      return c.json({ config: redactModelProviderApiKeys(config) }, 200);
     },
   );
 

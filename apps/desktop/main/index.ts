@@ -81,6 +81,7 @@ import { ProxyManager } from "./services/proxy-manager";
 import { flushV8CoverageIfEnabled } from "./services/v8-coverage";
 import { readPendingWindowsUserDataMigration } from "./services/windows-user-data-migration";
 import { SleepGuard, type SleepGuardLogEntry } from "./sleep-guard";
+import { markStartup } from "./startup-timing";
 import { ComponentUpdater } from "./updater/component-updater";
 import { StartupHealthCheck } from "./updater/rollback";
 import { UpdateManager } from "./updater/update-manager";
@@ -656,6 +657,7 @@ function logColdStart(message: string): void {
 }
 
 function logLaunchTimeline(message: string): void {
+  markStartup(message);
   const launchId = process.env.NEXU_DESKTOP_LAUNCH_ID ?? "unknown";
   writeDesktopMainLog({
     source: "launch-timeline",
@@ -752,16 +754,47 @@ async function runDesktopColdStart(): Promise<void> {
     orchestrator.startOne("controller"),
     orchestrator.startOne("web"),
   ]);
+  logLaunchTimeline("local-services:listening");
 
   diagnosticsReporter?.markColdStartRunning("waiting for controller readiness");
   logColdStart("waiting for controller readiness");
   await waitForControllerReadiness();
+  logLaunchTimeline("controller:core-ready");
+  void observeChatRuntimeReady();
 
   const sessionId = rotateDesktopLogSession();
   logColdStart(`cold start session ready sessionId=${sessionId}`);
 
   logColdStart("cold start complete");
   diagnosticsReporter?.markColdStartSucceeded();
+}
+
+// UI readiness deliberately precedes the full chat runtime. Measure both without
+// holding the first window behind gateway startup.
+async function observeChatRuntimeReady(): Promise<void> {
+  const deadline = Date.now() + 120_000;
+  const url = new URL(
+    "/api/internal/desktop/ready",
+    runtimeConfig.urls.controllerBase,
+  );
+  while (Date.now() < deadline && !isForceQuitInProgress()) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(2000) });
+      if (
+        response.ok &&
+        ((await response.json()) as { ready?: boolean }).ready === true
+      ) {
+        logLaunchTimeline("controller:ready");
+        await diagnosticsReporter?.flushNow().catch(() => undefined);
+        return;
+      }
+    } catch {
+      // The next bounded probe can recover from startup connection failures.
+    }
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 500).unref();
+    });
+  }
 }
 
 async function runLaunchdColdStart(): Promise<void> {
@@ -1210,7 +1243,7 @@ function createMainWindow(): BrowserWindow {
           y: workArea.y + Math.floor((workArea.height - height) / 2),
         }
       : {}),
-    backgroundColor: isMacOS ? "#00000000" : "#f5f8f3",
+    backgroundColor: isMacOS ? "#00000000" : "#f3f7fc",
     title: "微信 AI 接入助手",
     autoHideMenuBar: !isMacOS,
     titleBarStyle: "hiddenInset",
@@ -1553,6 +1586,7 @@ app.on("web-contents-created", (_event, contents) => {
       type: contentType,
       url,
     });
+    if (url.includes("/workspace")) markStartup("workspace:loaded");
     logRendererEvent({
       source: `embedded:${contentType}`,
       stream: "stdout",

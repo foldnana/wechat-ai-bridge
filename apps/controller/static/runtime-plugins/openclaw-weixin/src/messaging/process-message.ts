@@ -38,7 +38,7 @@ import { sendWeixinMediaFile } from "./send-media.js";
 import { markdownToPlainText, sendMessageWeixin } from "./send.js";
 import { handleSlashCommand } from "./slash-commands.js";
 import { replyBubbles, sendReplyBubbles } from "./bridge-reply-rhythm.js";
-import { contactPrompt, loadContact, observeContact } from "../storage/bridge-contacts.js";
+import { contactPrompt, contactReplyRevision, loadContact, observeContact } from "../storage/bridge-contacts.js";
 
 const MEDIA_OUTBOUND_TEMP_DIR = path.join(
   resolvePreferredOpenClawTmpDir(),
@@ -238,7 +238,7 @@ export async function processOneMessage(
   ctx.CommandAuthorized = commandAuthorized;
   const contact = loadContact(deps.accountId, senderId);
   ctx.GroupSystemPrompt = contactPrompt(contact);
-  const contactUnchanged = () => loadContact(deps.accountId, senderId)?.revision === contact?.revision;
+  const contactUnchanged = () => contactReplyRevision(loadContact(deps.accountId, senderId)) === contactReplyRevision(contact);
   if (!deps.proactiveValid) {
     try { observeContact(deps.accountId, senderId); }
     catch { deps.errLog("Cannot update local contact index"); }
@@ -374,9 +374,11 @@ export async function processOneMessage(
       humanDelay,
       typingCallbacks,
       deliver: async (payload) => {
-        if (deps.abortSignal?.aborted || bridgeRepliesPaused() || !contactUnchanged() || (deps.replyValid && !deps.replyValid())) return;
-        if (deps.proactiveValid && (!deps.proactiveValid() || payload.isError))
+        if (deps.abortSignal?.aborted || bridgeRepliesPaused() || !contactUnchanged() || (deps.replyValid && !deps.replyValid()) || (deps.proactiveValid && !deps.proactiveValid())) {
+          bridgeActivity.cancelled();
           return;
+        }
+        if (deps.proactiveValid && payload.isError) return;
         const text = markdownToPlainText(
           stripStickerMarkers(payload.text ?? ""),
         );
@@ -458,7 +460,10 @@ export async function processOneMessage(
               return;
             }
             if (deps.abortSignal?.aborted || bridgeRepliesPaused() || !contactUnchanged() ||
-              (deps.replyValid && !deps.replyValid()) || (deps.proactiveValid && !deps.proactiveValid())) return;
+              (deps.replyValid && !deps.replyValid()) || (deps.proactiveValid && !deps.proactiveValid())) {
+              bridgeActivity.cancelled();
+              return;
+            }
             await sendWeixinMediaFile({
               filePath,
               to: ctx.To,
@@ -469,7 +474,7 @@ export async function processOneMessage(
             logger.info(`outbound: media sent OK to=${ctx.To}`);
           } else if (text.trim()) {
             logger.debug(`outbound: sending text message to=${ctx.To}`);
-            const rhythm = loadBehavior()?.delivery;
+            const rhythm = loadBehavior()?.delivery ?? { mode: "natural" as const, maxBubbles: 2, pauseMs: 1200 };
             const complete = await sendReplyBubbles(
               payload.isError
                 ? [text]
@@ -485,10 +490,15 @@ export async function processOneMessage(
               deps.abortSignal,
             );
             if (!complete) {
-              bridgeActivity.failed("send");
+              bridgeActivity.cancelled();
               return;
             }
             logger.info(`outbound: text sent OK to=${ctx.To}`);
+          }
+          // Record the main reply before attempting an optional decoration.
+          if (isAnswer && (text.trim() || mediaUrl)) {
+            bridgeActivity.sent();
+            delivered = true;
           }
           if (
             sticker &&
@@ -498,17 +508,23 @@ export async function processOneMessage(
             !bridgeRepliesPaused() &&
             (!deps.proactiveValid || deps.proactiveValid())
           ) {
-            await sendWeixinMediaFile({
+            try {
+              await sendWeixinMediaFile({
               filePath: sticker,
               to: ctx.To,
               text: "",
               opts: { baseUrl: deps.baseUrl, token: deps.token, contextToken },
               cdnBaseUrl: deps.cdnBaseUrl,
-            });
-          }
-          if (isAnswer) {
-            bridgeActivity.sent();
-            delivered = true;
+              });
+              if (isAnswer) {
+                bridgeActivity.sent();
+                delivered = true;
+              }
+            } catch (error) {
+              if (!delivered) throw error;
+              bridgeActivity.stickerFailed();
+              deps.errLog("Optional sticker failed; the main reply was delivered");
+            }
           }
         } catch (err) {
           bridgeActivity.failed("send");

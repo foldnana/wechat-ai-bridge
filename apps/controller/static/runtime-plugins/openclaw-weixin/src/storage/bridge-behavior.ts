@@ -7,12 +7,15 @@ import { bridgeRepliesPaused } from "./bridge-control.js";
 
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const schema = z.object({
-  incoming: z.object({ waitMs: z.number().int().min(0).max(60000) }).default({ waitMs: 12000 }),
+  incoming: z.object({
+    mode: z.enum(["auto", "fixed"]).default("fixed"),
+    waitMs: z.number().int().min(0).max(60000),
+  }).default({ mode: "auto", waitMs: 4000 }),
   delivery: z.object({
     mode: z.enum(["single", "natural"]),
     maxBubbles: z.number().int().min(2).max(3),
     pauseMs: z.number().int().min(500).max(3000),
-  }).default({ mode: "single", maxBubbles: 2, pauseMs: 1200 }),
+  }).default({ mode: "natural", maxBubbles: 2, pauseMs: 1200 }),
   stickers: z.object({
     enabled: z.boolean(),
     probability: z.number().int().min(0).max(100),
@@ -81,7 +84,7 @@ const stickersSchema = z
       id: z.string().uuid(),
       label: z.string(),
       tags: z.string(),
-      extension: z.enum(["png", "jpg", "gif"]),
+      extension: z.enum(["png", "jpg", "gif", "webp"]),
     }),
   )
   .max(24);

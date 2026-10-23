@@ -8,7 +8,7 @@ import {
   writeBehaviorState,
 } from "../storage/bridge-behavior.js";
 import { bridgeControlVersion, bridgeRepliesPaused } from "../storage/bridge-control.js";
-import { loadContact } from "../storage/bridge-contacts.js";
+import { contactReplyRevision, loadContact } from "../storage/bridge-contacts.js";
 
 const budgetSchema = z.object({
   day: z.string(),
@@ -184,7 +184,9 @@ export class BridgeProactive {
           !signal?.aborted &&
           !bridgeRepliesPaused() &&
           bridgeControlVersion() === initialControl &&
-          loadContact(this.accountId, user)?.revision === contact.revision &&
+          contactReplyRevision(loadContact(this.accountId, user)) === contactReplyRevision(contact) &&
+          loadContact(this.accountId, user)?.settings.proactive === contact.settings.proactive &&
+          loadContact(this.accountId, user)?.settings.topicMode === contact.settings.topicMode &&
           this.peers.get(user) === peer &&
           JSON.stringify(loadBehavior()) === initialConfig &&
           !quietNow(

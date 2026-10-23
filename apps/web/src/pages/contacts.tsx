@@ -45,19 +45,19 @@ export function ContactsPage() {
       (await getApiV1BridgeContacts({ throwOnError: true })).data,
   });
   const list = contacts.data ?? [];
-  const current = list.find((c) => c.id === selected) ?? list[0];
   const currentPage = Math.min(
     page,
     Math.max(0, Math.ceil(list.length / 5) - 1),
   );
+  const visibleContacts = list.slice(currentPage * 5, currentPage * 5 + 5);
+  const current =
+    visibleContacts.find((c) => c.id === selected) ?? visibleContacts[0];
   return (
     <div className="bridge-page bridge-contacts-page">
       <header className="bridge-page-heading">
         <div>
-          <span className="bridge-eyebrow">
-            EVERY CONVERSATION IS DIFFERENT
-          </span>
-          <h1>记得你，也懂怎么陪你。</h1>
+          <span className="bridge-eyebrow">按会话独立配置</span>
+          <h1>联系人与记忆</h1>
           <p>每个微信会话独立设置，记住的内容由你决定。</p>
         </div>
         <Link className="bridge-back-link" to="/workspace/behavior">
@@ -77,7 +77,7 @@ export function ContactsPage() {
       ) : !current ? (
         <section className="bridge-panel bridge-contacts-empty">
           <UsersRound size={36} />
-          <h2>从一次聊天开始认识。</h2>
+          <h2>暂无联系人</h2>
           <p>
             已连接微信后，发一条消息，再刷新这里。只有通过授权的会话才会出现；不会读取微信通讯录。
           </p>
@@ -109,7 +109,7 @@ export function ContactsPage() {
                 <RefreshCw size={15} />
               </button>
             </div>
-            {list.slice(currentPage * 5, currentPage * 5 + 5).map((c) => (
+            {visibleContacts.map((c) => (
               <button
                 type="button"
                 className="bridge-contact-item"
@@ -385,7 +385,7 @@ function ContactEditor({
               </>
             ) : (
               <>
-                <h2>主动一点，也尊重对方的时间。</h2>
+                <h2>该联系人的主动聊天设置</h2>
                 <div className="bridge-proactive-fields">
                   <label className="bridge-field bridge-field-full">
                     这个会话可以被主动联系吗

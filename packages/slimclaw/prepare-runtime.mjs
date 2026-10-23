@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { installRuntimeAt } from "./install-runtime.mjs";
+import { patchBridgeModelRequest } from "./patch-model-request.mjs";
 import { computeFingerprint } from "./postinstall-cache.mjs";
 import { pruneRuntimeAt } from "./prune-runtime.mjs";
 import { exists } from "./utils.mjs";
@@ -61,6 +62,7 @@ export async function prepareSlimclawOwnedRuntimeInstall() {
     cachedFingerprint === fingerprint
   ) {
     console.log("slimclaw runtime unchanged, skipping install:pruned.");
+    await patchBridgeModelRequest(runtimeDir);
     return;
   }
 
@@ -80,6 +82,7 @@ export async function prepareSlimclawOwnedRuntimeInstall() {
 
   await installRuntimeAt(runtimeDir, "pruned");
   await pruneRuntimeAt(runtimeDir);
+  await patchBridgeModelRequest(runtimeDir);
 
   await writeFile(
     cacheFilePath,

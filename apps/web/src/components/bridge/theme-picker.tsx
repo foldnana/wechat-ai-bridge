@@ -24,7 +24,7 @@ export function ThemePicker() {
     queryFn: async () =>
       (await getApiInternalDesktopDefaultModel({ throwOnError: true })).data,
   });
-  // First setup defaults to DeepSeek; a saved non-DeepSeek model uses the user's palette.
+  // Whale is the default palette; following the model is an optional preference.
   const effective = resolveBridgeTheme(
     selected,
     followModel,
@@ -55,13 +55,10 @@ export function ThemePicker() {
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="bridge-dialog">
-          <span className="bridge-eyebrow">MAKE YOURSELF AT HOME</span>
-          <DialogTitle className="bridge-dialog-title">
-            选一种喜欢的颜色。
-          </DialogTitle>
+          <span className="bridge-eyebrow">界面设置</span>
+          <DialogTitle className="bridge-dialog-title">选择配色</DialogTitle>
           <DialogDescription className="bridge-dialog-description">
-            跟随模型时，DeepSeek
-            使用大肥鱼蓝。也可以选一种颜色，下次打开会记住。
+            默认使用大肥鱼蓝，与所选模型无关。也可以换一种配色，下次打开会记住。
           </DialogDescription>
           <label className="bridge-theme-auto">
             <input

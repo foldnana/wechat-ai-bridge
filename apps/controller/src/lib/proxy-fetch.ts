@@ -201,6 +201,15 @@ function createAbortSignal(
       abortedByCaller: () => false,
     };
   }
+  // Preserve caller deadlines after response headers, while the body is read.
+  if (signal && timeoutMs === undefined) {
+    return {
+      signal,
+      cleanup: () => {},
+      timedOut: () => false,
+      abortedByCaller: () => signal.aborted,
+    };
+  }
 
   const controller = new AbortController();
   let timeoutId: NodeJS.Timeout | null = null;

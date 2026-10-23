@@ -36,6 +36,25 @@ async function setup() {
   return { root, app, item, endpoint, put };
 }
 describe("local per-contact preferences and explicit memory", () => {
+  it("separates local edits from reply invalidation and cannot restore a cleared reply revision", async () => {
+    const f = await setup();
+    const settings = contactSettingsSchema.parse({
+      memoryEnabled: true,
+      memories: ["记忆"],
+    });
+    const first = await (await f.put("initial", settings)).json();
+    const renamed = await (
+      await f.put(first.revision, { ...settings, label: "本地备注" })
+    ).json();
+    expect(renamed.revision).not.toBe(first.revision);
+    expect(renamed.replyRevision).toBe(first.replyRevision);
+    const cleared = await (
+      await f.app.request(`${f.endpoint}/memories`, { method: "DELETE" })
+    ).json();
+    expect(cleared.replyRevision).not.toBe(first.replyRevision);
+    const restored = await (await f.put(cleared.revision, settings)).json();
+    expect(restored.replyRevision).not.toBe(first.replyRevision);
+  });
   it("registers only hashed identifiers and isolates the same peer across accounts", async () => {
     const f = await setup();
     observeContact("account-b", "private-peer");

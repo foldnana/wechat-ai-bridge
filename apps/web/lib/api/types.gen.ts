@@ -240,6 +240,77 @@ export type PostApiV1BotsByBotIdResumeResponses = {
 
 export type PostApiV1BotsByBotIdResumeResponse = PostApiV1BotsByBotIdResumeResponses[keyof PostApiV1BotsByBotIdResumeResponses];
 
+export type GetApiV1BridgeModelsSavedData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/models/saved';
+};
+
+export type GetApiV1BridgeModelsSavedResponses = {
+    /**
+     * Saved compatible connections without credentials
+     */
+    200: {
+        connections: Array<{
+            id: string;
+            label: string;
+            revision: string;
+            deepseekOfficial?: boolean;
+            modelOptions?: {
+                [key: string]: {
+                    thinking: 'auto' | 'off' | 'low' | 'high' | 'max';
+                    timeoutSeconds: number;
+                    retries: number;
+                };
+            };
+        }>;
+        selectedProviderKey: string;
+        currentModel: string;
+    };
+};
+
+export type GetApiV1BridgeModelsSavedResponse = GetApiV1BridgeModelsSavedResponses[keyof GetApiV1BridgeModelsSavedResponses];
+
+export type PostApiV1BridgeModelsDiscoverData = {
+    body: {
+        savedProviderKey: string;
+        revision: string;
+    } | {
+        provider?: 'deepseek' | 'custom-openai';
+        apiKey: string;
+        baseUrl?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/bridge/models/discover';
+};
+
+export type PostApiV1BridgeModelsDiscoverResponses = {
+    /**
+     * Read provider model IDs without saving configuration or generating text
+     */
+    200: {
+        ok: boolean;
+        code: string;
+        message: string;
+        models: Array<string>;
+        incomplete?: boolean;
+        details?: Array<{
+            id: string;
+            name?: string;
+            context_window?: number;
+            max_output_tokens?: number;
+            input_modalities?: Array<'text' | 'image' | 'audio' | 'video'>;
+            effort?: {
+                supported_levels: Array<'low' | 'high' | 'max'>;
+            };
+        }>;
+    };
+};
+
+export type PostApiV1BridgeModelsDiscoverResponse = PostApiV1BridgeModelsDiscoverResponses[keyof PostApiV1BridgeModelsDiscoverResponses];
+
 export type GetApiV1BridgeControlData = {
     body?: never;
     path?: never;
@@ -321,6 +392,8 @@ export type GetApiV1BridgeActivityResponses = {
                 lastSuccessfulReplyAt: string;
                 error: 'generation' | 'send';
                 trigger?: 'proactive';
+                cancelled?: boolean;
+                warning?: 'sticker';
             };
         }>;
     };
@@ -330,10 +403,24 @@ export type GetApiV1BridgeActivityResponse = GetApiV1BridgeActivityResponses[key
 
 export type PostApiV1BridgeModelData = {
     body: {
+        savedProviderKey: string;
+        revision: string;
+        model: string;
+        options?: {
+            thinking: 'auto' | 'off' | 'low' | 'high' | 'max';
+            timeoutSeconds: number;
+            retries: number;
+        };
+    } | {
         provider?: 'deepseek' | 'custom-openai';
         apiKey: string;
-        model?: string;
         baseUrl?: string;
+        model?: string;
+        options?: {
+            thinking: 'auto' | 'off' | 'low' | 'high' | 'max';
+            timeoutSeconds: number;
+            retries: number;
+        };
     };
     path?: never;
     query?: never;
@@ -418,6 +505,7 @@ export type GetApiV1BridgeBehaviorResponses = {
     200: {
         persona?: 'auto' | 'whale' | 'none';
         incoming?: {
+            mode?: 'auto' | 'fixed';
             waitMs?: number;
         };
         delivery?: {
@@ -450,6 +538,7 @@ export type PutApiV1BridgeBehaviorData = {
     body: {
         persona?: 'auto' | 'whale' | 'none';
         incoming?: {
+            mode?: 'auto' | 'fixed';
             waitMs?: number;
         };
         delivery?: {
@@ -497,6 +586,7 @@ export type PutApiV1BridgeBehaviorResponses = {
     200: {
         persona?: 'auto' | 'whale' | 'none';
         incoming?: {
+            mode?: 'auto' | 'fixed';
             waitMs?: number;
         };
         delivery?: {
@@ -551,7 +641,7 @@ export type GetApiV1BridgeStickersResponses = {
         id: string;
         label: string;
         tags: string;
-        extension: 'png' | 'jpg' | 'gif';
+        extension: 'png' | 'jpg' | 'gif' | 'webp';
     }>;
 };
 
@@ -587,7 +677,7 @@ export type PostApiV1BridgeStickersResponses = {
         id: string;
         label: string;
         tags: string;
-        extension: 'png' | 'jpg' | 'gif';
+        extension: 'png' | 'jpg' | 'gif' | 'webp';
     }>;
 };
 
@@ -621,7 +711,7 @@ export type DeleteApiV1BridgeStickersByIdResponses = {
         id: string;
         label: string;
         tags: string;
-        extension: 'png' | 'jpg' | 'gif';
+        extension: 'png' | 'jpg' | 'gif' | 'webp';
     }>;
 };
 
@@ -724,6 +814,7 @@ export type GetApiV1BridgeContactsByIdResponses = {
      */
     200: {
         revision: string;
+        replyRevision?: string;
         settings: {
             label?: string;
             nickname?: string;
@@ -742,6 +833,7 @@ export type GetApiV1BridgeContactsByIdResponse = GetApiV1BridgeContactsByIdRespo
 export type PutApiV1BridgeContactsByIdData = {
     body: {
         revision: string;
+        replyRevision?: string;
         settings: {
             label?: string;
             nickname?: string;
@@ -789,6 +881,7 @@ export type PutApiV1BridgeContactsByIdResponses = {
      */
     200: {
         revision: string;
+        replyRevision?: string;
         settings: {
             label?: string;
             nickname?: string;
@@ -842,6 +935,7 @@ export type DeleteApiV1BridgeContactsByIdMemoriesResponses = {
      */
     200: {
         revision: string;
+        replyRevision?: string;
         settings: {
             label?: string;
             nickname?: string;
@@ -1675,6 +1769,9 @@ export type GetApiV1ModelProvidersConfigResponses = {
      * Model provider config document
      */
     200: {
+        /**
+         * API keys are replaced by __BRIDGE_SAVED_API_KEY__. Return that marker unchanged to retain the same provider's local key; supply a new key when changing its base URL.
+         */
         config: {
             mode?: 'merge' | 'replace';
             providers?: {
@@ -1806,11 +1903,21 @@ export type PutApiV1ModelProvidersConfigData = {
     url: '/api/v1/model-providers/config';
 };
 
+export type PutApiV1ModelProvidersConfigErrors = {
+    /**
+     * Saved API key missing or connection address changed
+     */
+    400: unknown;
+};
+
 export type PutApiV1ModelProvidersConfigResponses = {
     /**
-     * Updated model provider config document
+     * Updated model provider config document (API keys masked)
      */
     200: {
+        /**
+         * API keys are replaced by __BRIDGE_SAVED_API_KEY__. Return that marker unchanged to retain the same provider's local key; supply a new key when changing its base URL.
+         */
         config: {
             mode?: 'merge' | 'replace';
             providers?: {

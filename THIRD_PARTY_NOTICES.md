@@ -1,5 +1,14 @@
 # Third-party notices
 
+## Bundled community whale stickers
+
+- Pack v4: 4 whale-girl daily illustrations by MX1951 plus one user-provided reaction image (`not-full.webp`).
+- Original submission: https://github.com/lmy414/ai-girl-stickers/issues/7 . The submitter explicitly marks these self-created/generated images as CC0.
+- `not-full.webp` was supplied by the user with an explicit instruction to include it and push to Git on 2026-10-23. No author/license information was supplied; the CC0 submission above does not cover this image.
+- Pixels are unchanged. Bridge adds Chinese labels, usage tags and stable IDs.
+- Original submission snapshots, source filenames and SHA-256 hashes ship in `apps/controller/static/stickers/whale/` (packaged at `resources/runtime/controller/static/stickers/whale/`).
+- The four SAKURAfan1023 images from pack v1 and four 1cyberlangke1 images from pack v2 were removed because their character design did not match the requested theme. No official DeepSeek endorsement or trademark license is implied.
+
 This project includes source code from [nexu](https://github.com/nexu-io/nexu).
 
 Copyright (c) 2026 Powerformer, Inc.

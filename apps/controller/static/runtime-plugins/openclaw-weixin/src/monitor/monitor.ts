@@ -112,7 +112,8 @@ export async function monitorWeixinProvider(
   const configManager = new WeixinConfigManager({ baseUrl, token }, log);
   const proactive = new BridgeProactive(accountId);
   const inbox = new BridgeInbox({
-    waitMs: () => loadBehavior()?.incoming.waitMs ?? 12000,
+    waitMs: () => loadBehavior()?.incoming.waitMs ?? 4000,
+    automatic: () => (loadBehavior()?.incoming.mode ?? "auto") === "auto",
     version: bridgeControlVersion,
     paused: () => bridgeRepliesPaused() || getRemainingPauseMs(accountId) > 0,
     error: () =>

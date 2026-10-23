@@ -19,6 +19,7 @@ import { Link } from "react-router-dom";
 import {
   getApiInternalDesktopDefaultModel,
   getApiV1BridgeBehavior,
+  getApiV1BridgeModelsSaved,
   getApiV1BridgePreset,
   getApiV1Sessions,
   postApiV1BridgeModel,
@@ -27,7 +28,15 @@ import {
   putApiV1BridgePreset,
 } from "../../lib/api/sdk.gen";
 import { BridgeConfirmDialog } from "../components/bridge/confirm-dialog";
+import {
+  ModelAdvancedOptions,
+  ModelDescription,
+  type ModelOptions,
+  defaultModelOptions,
+} from "../components/bridge/model-options";
+import { SavedModelConnection } from "../components/bridge/saved-model-connection";
 import { WhaleCompanion } from "../components/bridge/whale-companion";
+import { useModelDiscovery } from "../hooks/use-model-discovery";
 
 type SettingsTab = "model" | "preset" | "sessions";
 const PRESET_SUGGESTIONS = [
@@ -48,9 +57,45 @@ export function BridgeSettingsPage({
     "deepseek",
   );
   const [apiKey, setApiKey] = useState("");
+  const [providerPreset, setProviderPreset] = useState("deepseek");
+  const [modelOptions, setModelOptions] = useState<ModelOptions>({
+    ...defaultModelOptions,
+  });
   const [showKey, setShowKey] = useState(false);
   const [model, setModel] = useState("deepseek-chat");
   const [baseUrl, setBaseUrl] = useState("");
+  const [manualModel, setManualModel] = useState(false);
+  const [configureNewApi, setConfigureNewApi] = useState(false);
+  const savedConnections = useQuery({
+    queryKey: ["bridge-saved-models"],
+    enabled: tab === "model",
+    queryFn: async () =>
+      (await getApiV1BridgeModelsSaved({ throwOnError: true })).data,
+  });
+  const discovery = useModelDiscovery();
+  const discoveredModels = discovery.result?.models ?? [];
+  const canDiscover =
+    Boolean(apiKey.trim()) &&
+    (provider === "deepseek" || Boolean(baseUrl.trim()));
+  async function discoverModels(force = false) {
+    if (
+      !canDiscover ||
+      discovery.loading ||
+      (!force && (discovery.result || manualModel))
+    )
+      return;
+    const result = await discovery.discover({
+      provider,
+      apiKey: apiKey.trim(),
+      ...(provider === "custom-openai" ? { baseUrl: baseUrl.trim() } : {}),
+    });
+    if (result?.ok && !manualModel) {
+      setModel(
+        result.models.includes(model) ? model : (result.models[0] ?? ""),
+      );
+      test.reset();
+    }
+  }
   const [draft, setDraft] = useState<string | null>(null);
   const [resetId, setResetId] = useState<string | null>(null);
   const selected = useQuery({
@@ -89,16 +134,30 @@ export function BridgeSettingsPage({
             provider,
             apiKey,
             model,
+            options: {
+              ...modelOptions,
+              thinking:
+                (provider === "deepseek" ||
+                  /^https:\/\/api\.deepseek\.com(?:\/|$)/.test(baseUrl)) &&
+                ["deepseek-flash", "deepseek-v4-pro"].includes(model)
+                  ? modelOptions.thinking
+                  : "auto",
+            },
             ...(provider === "custom-openai" ? { baseUrl } : {}),
           },
-          signal: AbortSignal.timeout(120_000),
+          signal: AbortSignal.timeout(
+            (modelOptions.timeoutSeconds + 60) * 1000,
+          ),
           throwOnError: true,
         })
       ).data,
     onSuccess: (result) => {
       if (result?.saved) {
+        discovery.reset();
         setApiKey("");
         setShowKey(false);
+        setConfigureNewApi(false);
+        void cache.invalidateQueries({ queryKey: ["bridge-saved-models"] });
         void cache.invalidateQueries({ queryKey: ["desktop-default-model"] });
         void cache.invalidateQueries({ queryKey: ["models"] });
       }
@@ -144,7 +203,7 @@ export function BridgeSettingsPage({
     Math.max(0, Math.ceil(wechatSessions.length / 4) - 1),
   );
   const presetValue = draft ?? preset.data?.preset ?? "";
-  const personaMode = behavior.data?.persona ?? "auto";
+  const personaMode = behavior.data?.persona ?? "whale";
   const whaleDefault =
     personaMode === "whale" ||
     (personaMode === "auto" && isDeepSeekModel(selected.data?.modelId));
@@ -154,21 +213,23 @@ export function BridgeSettingsPage({
         <div>
           <span className="bridge-eyebrow">
             {tab === "model"
-              ? "01 / BRING YOUR OWN MODEL"
+              ? "第 1 步 · 配置 API"
               : tab === "preset"
-                ? "A VOICE THAT FEELS LIKE YOU"
-                : "ROOM FOR A NEW CONVERSATION"}
+                ? "人设与预设"
+                : "会话与上下文"}
           </span>
           <h1>
             {tab === "model"
-              ? "先认识你的 AI。"
+              ? "模型连接"
               : tab === "preset"
-                ? "让回答更合你的心意。"
-                : "管理你的微信对话。"}
+                ? "回答风格"
+                : "对话管理"}
           </h1>
           <p>
             {tab === "model"
-              ? "选择接口类型，填写密钥。测试通过后，下一步连接微信。"
+              ? savedConnections.data?.connections?.length && !configureNewApi
+                ? "使用已保存的 API 选择模型，无需重复填写密钥。"
+                : "填写密钥，读取并选择模型。测试通过后，下一步连接微信。"
               : tab === "preset"
                 ? "写下你的偏好，之后的回答会参考这份说明。"
                 : "想换个话题时，新开一段对话，让 AI 从新的上下文开始。"}
@@ -209,7 +270,44 @@ export function BridgeSettingsPage({
                   </Link>
                 </div>
               )}
-              {test.data?.saved ? (
+              {savedConnections.isError && (
+                <p role="alert" className="bridge-feedback is-error">
+                  暂时无法读取已保存 API。
+                  <button
+                    type="button"
+                    className="bridge-text-button"
+                    onClick={() => void savedConnections.refetch()}
+                  >
+                    重新读取
+                  </button>
+                </p>
+              )}
+              {configureNewApi &&
+                Boolean(savedConnections.data?.connections?.length) && (
+                  <button
+                    type="button"
+                    className="bridge-text-button"
+                    onClick={() => {
+                      discovery.reset();
+                      test.reset();
+                      setConfigureNewApi(false);
+                    }}
+                  >
+                    返回已保存 API
+                  </button>
+                )}
+              {savedConnections.isPending ? (
+                <output>正在读取已保存 API…</output>
+              ) : !configureNewApi &&
+                savedConnections.data?.connections?.length ? (
+                <SavedModelConnection
+                  data={savedConnections.data}
+                  onConfigure={() => {
+                    test.reset();
+                    setConfigureNewApi(true);
+                  }}
+                />
+              ) : test.data?.saved && test.data.ok ? (
                 <div className="bridge-model-success">
                   <span className="bridge-icon-box">
                     <Check size={25} />
@@ -231,6 +329,11 @@ export function BridgeSettingsPage({
                 <form
                   onSubmit={(event) => {
                     event.preventDefault();
+                    if (
+                      discovery.loading ||
+                      (!manualModel && !discoveredModels.includes(model))
+                    )
+                      return;
                     test.mutate();
                   }}
                 >
@@ -242,31 +345,96 @@ export function BridgeSettingsPage({
                       <label htmlFor="bridge-provider">模型服务商</label>
                       <select
                         id="bridge-provider"
-                        value={provider}
+                        value={providerPreset}
                         onChange={(event) => {
-                          setProvider(event.target.value as typeof provider);
+                          const preset = event.target.value;
+                          setProviderPreset(preset);
+                          setProvider(
+                            preset === "deepseek"
+                              ? "deepseek"
+                              : "custom-openai",
+                          );
+                          setBaseUrl(
+                            preset === "bailian"
+                              ? "https://dashscope.aliyuncs.com/compatible-mode/v1"
+                              : preset === "siliconflow"
+                                ? "https://api.siliconflow.cn/v1"
+                                : "",
+                          );
+                          setModelOptions({ ...defaultModelOptions });
+                          setApiKey("");
+                          setShowKey(false);
+                          setModel(
+                            event.target.value === "deepseek"
+                              ? "deepseek-chat"
+                              : "",
+                          );
+                          discovery.reset();
                           test.reset();
                         }}
                       >
                         <option value="deepseek">DeepSeek 官方 API</option>
+                        <option value="bailian">阿里云百炼（北京）</option>
+                        <option value="siliconflow">
+                          硅基流动（中国大陆）
+                        </option>
                         <option value="custom-openai">
                           其他 OpenAI 兼容服务
                         </option>
                       </select>
                     </div>
                     <div className="bridge-field">
-                      <label htmlFor="bridge-model-name">模型名称</label>
-                      <input
-                        id="bridge-model-name"
-                        required
-                        maxLength={200}
-                        value={model}
-                        onChange={(event) => {
-                          setModel(event.target.value);
-                          test.reset();
-                        }}
-                        placeholder="服务商提供的模型 ID"
-                      />
+                      <label htmlFor="bridge-model-name">
+                        模型
+                        <button
+                          type="button"
+                          className="bridge-text-button"
+                          onClick={() => {
+                            if (discovery.loading) discovery.reset();
+                            setManualModel(!manualModel);
+                            test.reset();
+                          }}
+                        >
+                          {manualModel ? "从列表选择" : "手动填写"}
+                        </button>
+                      </label>
+                      {manualModel ? (
+                        <input
+                          id="bridge-model-name"
+                          required
+                          maxLength={200}
+                          value={model}
+                          onChange={(event) => {
+                            setModel(event.target.value);
+                            test.reset();
+                          }}
+                          placeholder="服务商提供的模型 ID"
+                        />
+                      ) : (
+                        <select
+                          id="bridge-model-name"
+                          required
+                          value={discoveredModels.includes(model) ? model : ""}
+                          disabled={
+                            discovery.loading || !discoveredModels.length
+                          }
+                          onChange={(event) => {
+                            setModel(event.target.value);
+                            test.reset();
+                          }}
+                        >
+                          <option value="" disabled>
+                            {discovery.loading
+                              ? "正在读取…"
+                              : "填写密钥后自动读取"}
+                          </option>
+                          {discoveredModels.map((id) => (
+                            <option key={id} value={id}>
+                              {id}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                     <div className="bridge-field bridge-field-full">
                       <label htmlFor="bridge-api-key">
@@ -283,8 +451,10 @@ export function BridgeSettingsPage({
                           value={apiKey}
                           onChange={(event) => {
                             setApiKey(event.target.value);
+                            discovery.reset();
                             test.reset();
                           }}
+                          onBlur={() => void discoverModels()}
                           placeholder="粘贴你的 API Key"
                         />
                         <button
@@ -306,16 +476,56 @@ export function BridgeSettingsPage({
                           value={baseUrl}
                           onChange={(event) => {
                             setBaseUrl(event.target.value);
+                            discovery.reset();
                             test.reset();
                           }}
+                          onBlur={() => void discoverModels()}
                           placeholder="https://example.com/v1"
                         />
                         <p className="bridge-field-hint">
                           填写服务商的基础地址，不包含
                           /chat/completions。密钥将发送至此地址。
+                          {providerPreset === "bailian" &&
+                            " 百炼密钥需匹配北京地域；工作空间专属地址可在此替换。"}
                         </p>
                       </div>
                     )}
+                    <div className="bridge-model-discovery bridge-field-full">
+                      <button
+                        type="button"
+                        className="bridge-text-button"
+                        disabled={!canDiscover || discovery.loading}
+                        onClick={() => void discoverModels(true)}
+                      >
+                        {discovery.loading ? (
+                          <Loader2 size={15} className="bridge-spin" />
+                        ) : (
+                          <RefreshCw size={15} />
+                        )}
+                        {discovery.loading
+                          ? "正在读取模型…"
+                          : discoveredModels.length
+                            ? "刷新模型列表"
+                            : "读取模型列表"}
+                      </button>
+                      <output aria-live="polite">
+                        {discovery.result?.message ??
+                          "填完密钥后自动读取；不支持列表的接口可手动填写。"}
+                      </output>
+                    </div>
+                    <ModelDescription model={model} result={discovery.result} />
+                    <ModelAdvancedOptions
+                      model={model}
+                      deepseekOfficial={
+                        provider === "deepseek" ||
+                        /^https:\/\/api\.deepseek\.com(?:\/|$)/.test(baseUrl)
+                      }
+                      value={modelOptions}
+                      onChange={(value) => {
+                        setModelOptions(value);
+                        test.reset();
+                      }}
+                    />
                     <p className="bridge-form-disclosure">
                       测试会生成一条简短回答，产生少量 API
                       用量。测试失败不会替换已保存的模型。
@@ -323,6 +533,10 @@ export function BridgeSettingsPage({
                     <button
                       type="submit"
                       className="bridge-button bridge-button-wide"
+                      disabled={
+                        discovery.loading ||
+                        (!manualModel && !discoveredModels.includes(model))
+                      }
                     >
                       {test.isPending ? (
                         <>
@@ -337,20 +551,17 @@ export function BridgeSettingsPage({
                       )}
                     </button>
                   </fieldset>
-                  {test.data && (
-                    <output
-                      aria-live="polite"
-                      className={`bridge-feedback ${test.data.ok ? "is-success" : "is-error"}`}
-                    >
-                      {test.data.message}
-                    </output>
-                  )}
-                  {test.isError && (
-                    <p role="alert" className="bridge-feedback is-error">
-                      本地服务没有及时完成请求。请刷新检查已保存模型，再决定是否重试。
-                    </p>
-                  )}
                 </form>
+              )}
+              {test.data && !test.data.ok && (
+                <output aria-live="polite" className="bridge-feedback is-error">
+                  {test.data.message}
+                </output>
+              )}
+              {test.isError && (
+                <p role="alert" className="bridge-feedback is-error">
+                  本地服务没有及时完成请求。请刷新检查已保存模型，再决定是否重试。
+                </p>
               )}
             </>
           )}
@@ -361,7 +572,7 @@ export function BridgeSettingsPage({
                   <Sparkles size={22} strokeWidth={1.5} />
                 </span>
                 <div>
-                  <h2>让回答，更合你意。</h2>
+                  <h2>编辑回答预设</h2>
                   <p>你的表达习惯，也可以成为 AI 的习惯。</p>
                 </div>
               </div>
@@ -422,6 +633,7 @@ export function BridgeSettingsPage({
                         <button
                           type="button"
                           className="bridge-text-button"
+                          disabled={preset.isPending || savePreset.isPending}
                           onClick={() => {
                             setDraft(WHALE_PERSONA);
                             savePreset.reset();
@@ -452,7 +664,7 @@ export function BridgeSettingsPage({
                     </span>
                   </div>
                   <div className="bridge-preset-suggestions">
-                    <span>找一点灵感</span>
+                    <span>预设示例</span>
                     {PRESET_SUGGESTIONS.map((item) => (
                       <button
                         key={item.label}
@@ -518,7 +730,7 @@ export function BridgeSettingsPage({
                   <MessageCircle size={22} strokeWidth={1.5} />
                 </span>
                 <div>
-                  <h2>随时，开启新一页。</h2>
+                  <h2>微信会话</h2>
                   <p>为微信会话重新开始上下文，保留你的预设。</p>
                 </div>
               </div>
@@ -554,7 +766,7 @@ export function BridgeSettingsPage({
                     <span>
                       <MessageCircle size={30} strokeWidth={1.3} />
                     </span>
-                    <h3>新的故事，还没开始。</h3>
+                    <h3>暂无微信会话</h3>
                     <p>
                       在微信聊过之后，
                       <br />
@@ -626,7 +838,7 @@ export function BridgeSettingsPage({
         </div>
         <aside className="bridge-settings-aside">
           <div className="bridge-editorial-card">
-            <span className="bridge-eyebrow">YOURS, BY DESIGN</span>
+            <span className="bridge-eyebrow">使用说明</span>
             <div className="bridge-editorial-art">
               <span />
               <span />
@@ -634,26 +846,26 @@ export function BridgeSettingsPage({
             </div>
             <div className="bridge-whale-editorial">
               <WhaleCompanion />
-              <span>米饭要吃，正事也要办。</span>
+              <span>大肥鱼：有事直接说。</span>
             </div>
             <h2>
               {tab === "model" ? (
                 <>
-                  模型你来选。
+                  使用自己的 API，
                   <br />
-                  连接交给我们。
+                  费用由服务商收取。
                 </>
               ) : tab === "preset" ? (
                 <>
-                  同一个 AI，
+                  默认大肥鱼，
                   <br />
-                  更多你的风格。
+                  预设可以修改。
                 </>
               ) : (
                 <>
-                  翻开新一页，
+                  新开对话，
                   <br />
-                  继续好好聊。
+                  重置当前上下文。
                 </>
               )}
             </h2>
@@ -662,7 +874,7 @@ export function BridgeSettingsPage({
                 ? "只需准备服务商的 API Key，无需服务器，也不需要微信密码。"
                 : tab === "preset"
                   ? "简洁一点，耐心一点，或多一点幽默。告诉 AI，你喜欢的方式。"
-                  : "新开对话让 AI 放下旧的上下文，带着你的预设重新出发。"}
+                  : "新开对话保留预设和联系人记忆，不删除本机历史记录。"}
             </p>
           </div>
           {tab === "model" ? (
@@ -670,10 +882,10 @@ export function BridgeSettingsPage({
               <h3>连接只需三小步</h3>
               <ol className="bridge-model-instructions">
                 <li>
-                  <span>1</span>选择服务商，核对模型名称。
+                  <span>1</span>选择服务商，填写 API Key。
                 </li>
                 <li>
-                  <span>2</span>填写密钥，测试并保存。
+                  <span>2</span>选择模型，测试并保存。
                 </li>
                 <li>
                   <span>3</span>前往微信连接，用手机扫码。
@@ -707,7 +919,7 @@ export function BridgeSettingsPage({
         onOpenChange={(open) => {
           if (!open) setResetId(null);
         }}
-        title="为这段对话翻开新一页？"
+        title="新开对话并重置上下文？"
         description="下次回复将不再携带旧上下文，你的预设会保留。本机和手机上的历史记录不会删除。"
         confirmLabel="新开对话"
         pending={resetSession.isPending}

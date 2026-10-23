@@ -19,6 +19,7 @@ import {
   getSlimclawRuntimeRoot,
   resolveSlimclawRuntimeArtifacts,
 } from "@nexu/slimclaw";
+import { pruneRuntimeDebugFiles } from "./lib/prune-runtime-debug.mjs";
 import { validateRuntimePluginDependencies } from "./lib/runtime-plugin-dependencies.mjs";
 import { resolvePnpmCommand } from "./platforms/filesystem-compat.mjs";
 import { resolveBuildTargetPlatform } from "./platforms/platform-resolver.mjs";
@@ -1248,6 +1249,18 @@ async function main() {
     },
     timings,
   );
+  if (!nsisFromExistingDir && process.env.NEXU_KEEP_DEBUG_SIDECARS !== "1") {
+    await timedStep(
+      "remove runtime debug sidecars",
+      async () => {
+        const result = await pruneRuntimeDebugFiles(runtimeDistRoot);
+        console.log(
+          `[dist:win] removed ${result.files} debug files (${result.bytes} bytes); runtime code and licenses retained`,
+        );
+      },
+      timings,
+    );
+  }
   await timedStep(
     "dereference pnpm symlinks",
     async () => {

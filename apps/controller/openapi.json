@@ -617,6 +617,266 @@
         }
       }
     },
+    "/api/v1/bridge/models/saved": {
+      "get": {
+        "tags": [
+          "Bridge"
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved compatible connections without credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "connections": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "revision": {
+                            "type": "string"
+                          },
+                          "deepseekOfficial": {
+                            "type": "boolean"
+                          },
+                          "modelOptions": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "object",
+                              "properties": {
+                                "thinking": {
+                                  "type": "string",
+                                  "enum": [
+                                    "auto",
+                                    "off",
+                                    "low",
+                                    "high",
+                                    "max"
+                                  ]
+                                },
+                                "timeoutSeconds": {
+                                  "type": "integer",
+                                  "minimum": 30,
+                                  "maximum": 180
+                                },
+                                "retries": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 2
+                                }
+                              },
+                              "required": [
+                                "thinking",
+                                "timeoutSeconds",
+                                "retries"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "revision"
+                        ]
+                      }
+                    },
+                    "selectedProviderKey": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "currentModel": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "connections",
+                    "selectedProviderKey",
+                    "currentModel"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bridge/models/discover": {
+      "post": {
+        "tags": [
+          "Bridge"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "savedProviderKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "revision": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    },
+                    "required": [
+                      "savedProviderKey",
+                      "revision"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string",
+                        "enum": [
+                          "deepseek",
+                          "custom-openai"
+                        ],
+                        "default": "deepseek"
+                      },
+                      "apiKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
+                      },
+                      "baseUrl": {
+                        "type": "string",
+                        "format": "uri"
+                      }
+                    },
+                    "required": [
+                      "apiKey"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Read provider model IDs without saving configuration or generating text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "incomplete": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "details": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "name": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "context_window": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 100000000
+                          },
+                          "max_output_tokens": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 100000000
+                          },
+                          "input_modalities": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "text",
+                                "image",
+                                "audio",
+                                "video"
+                              ]
+                            },
+                            "maxItems": 8
+                          },
+                          "effort": {
+                            "type": "object",
+                            "properties": {
+                              "supported_levels": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "enum": [
+                                    "low",
+                                    "high",
+                                    "max"
+                                  ]
+                                },
+                                "maxItems": 3
+                              }
+                            },
+                            "required": [
+                              "supported_levels"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "code",
+                    "message",
+                    "models"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/bridge/control": {
       "get": {
         "tags": [
@@ -788,6 +1048,15 @@
                                 "enum": [
                                   "proactive"
                                 ]
+                              },
+                              "cancelled": {
+                                "type": "boolean"
+                              },
+                              "warning": {
+                                "type": "string",
+                                "enum": [
+                                  "sticker"
+                                ]
                               }
                             },
                             "required": [
@@ -827,34 +1096,126 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "provider": {
-                    "type": "string",
-                    "enum": [
-                      "deepseek",
-                      "custom-openai"
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "savedProviderKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "revision": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "model": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "options": {
+                        "type": "object",
+                        "properties": {
+                          "thinking": {
+                            "type": "string",
+                            "enum": [
+                              "auto",
+                              "off",
+                              "low",
+                              "high",
+                              "max"
+                            ]
+                          },
+                          "timeoutSeconds": {
+                            "type": "integer",
+                            "minimum": 30,
+                            "maximum": 180
+                          },
+                          "retries": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 2
+                          }
+                        },
+                        "required": [
+                          "thinking",
+                          "timeoutSeconds",
+                          "retries"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "savedProviderKey",
+                      "revision",
+                      "model"
                     ],
-                    "default": "deepseek"
+                    "additionalProperties": false
                   },
-                  "apiKey": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4096
-                  },
-                  "model": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 200,
-                    "default": "deepseek-chat"
-                  },
-                  "baseUrl": {
-                    "type": "string",
-                    "format": "uri"
+                  {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string",
+                        "enum": [
+                          "deepseek",
+                          "custom-openai"
+                        ],
+                        "default": "deepseek"
+                      },
+                      "apiKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
+                      },
+                      "baseUrl": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "model": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "default": "deepseek-chat"
+                      },
+                      "options": {
+                        "type": "object",
+                        "properties": {
+                          "thinking": {
+                            "type": "string",
+                            "enum": [
+                              "auto",
+                              "off",
+                              "low",
+                              "high",
+                              "max"
+                            ]
+                          },
+                          "timeoutSeconds": {
+                            "type": "integer",
+                            "minimum": 30,
+                            "maximum": 180
+                          },
+                          "retries": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 2
+                          }
+                        },
+                        "required": [
+                          "thinking",
+                          "timeoutSeconds",
+                          "retries"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "apiKey"
+                    ],
+                    "additionalProperties": false
                   }
-                },
-                "required": [
-                  "apiKey"
                 ]
               }
             }
@@ -988,19 +1349,29 @@
                         "whale",
                         "none"
                       ],
-                      "default": "auto"
+                      "default": "whale"
                     },
                     "incoming": {
                       "type": "object",
                       "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "auto",
+                            "fixed"
+                          ],
+                          "default": "fixed"
+                        },
                         "waitMs": {
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 60000,
-                          "default": 12000
+                          "default": 4000
                         }
                       },
-                      "default": {}
+                      "default": {
+                        "mode": "auto"
+                      }
                     },
                     "delivery": {
                       "type": "object",
@@ -1011,7 +1382,7 @@
                             "single",
                             "natural"
                           ],
-                          "default": "single"
+                          "default": "natural"
                         },
                         "maxBubbles": {
                           "type": "integer",
@@ -1155,19 +1526,29 @@
                       "whale",
                       "none"
                     ],
-                    "default": "auto"
+                    "default": "whale"
                   },
                   "incoming": {
                     "type": "object",
                     "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "auto",
+                          "fixed"
+                        ],
+                        "default": "fixed"
+                      },
                       "waitMs": {
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 60000,
-                        "default": 12000
+                        "default": 4000
                       }
                     },
-                    "default": {}
+                    "default": {
+                      "mode": "auto"
+                    }
                   },
                   "delivery": {
                     "type": "object",
@@ -1178,7 +1559,7 @@
                           "single",
                           "natural"
                         ],
-                        "default": "single"
+                        "default": "natural"
                       },
                       "maxBubbles": {
                         "type": "integer",
@@ -1299,19 +1680,29 @@
                         "whale",
                         "none"
                       ],
-                      "default": "auto"
+                      "default": "whale"
                     },
                     "incoming": {
                       "type": "object",
                       "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "auto",
+                            "fixed"
+                          ],
+                          "default": "fixed"
+                        },
                         "waitMs": {
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 60000,
-                          "default": 12000
+                          "default": 4000
                         }
                       },
-                      "default": {}
+                      "default": {
+                        "mode": "auto"
+                      }
                     },
                     "delivery": {
                       "type": "object",
@@ -1322,7 +1713,7 @@
                             "single",
                             "natural"
                           ],
-                          "default": "single"
+                          "default": "natural"
                         },
                         "maxBubbles": {
                           "type": "integer",
@@ -1483,7 +1874,8 @@
                         "enum": [
                           "png",
                           "jpg",
-                          "gif"
+                          "gif",
+                          "webp"
                         ]
                       }
                     },
@@ -1583,7 +1975,8 @@
                         "enum": [
                           "png",
                           "jpg",
-                          "gif"
+                          "gif",
+                          "webp"
                         ]
                       }
                     },
@@ -1665,7 +2058,8 @@
                         "enum": [
                           "png",
                           "jpg",
-                          "gif"
+                          "gif",
+                          "webp"
                         ]
                       }
                     },
@@ -1875,6 +2269,11 @@
                       "minLength": 1,
                       "maxLength": 80
                     },
+                    "replyRevision": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
                     "settings": {
                       "type": "object",
                       "properties": {
@@ -2023,6 +2422,11 @@
                     "minLength": 1,
                     "maxLength": 80
                   },
+                  "replyRevision": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
                   "settings": {
                     "type": "object",
                     "properties": {
@@ -2097,6 +2501,11 @@
                   "type": "object",
                   "properties": {
                     "revision": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "replyRevision": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 80
@@ -2248,6 +2657,11 @@
                   "type": "object",
                   "properties": {
                     "revision": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "replyRevision": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 80
@@ -4721,7 +5135,8 @@
                             }
                           }
                         }
-                      }
+                      },
+                      "description": "API keys are replaced by __BRIDGE_SAVED_API_KEY__. Return that marker unchanged to retain the same provider's local key; supply a new key when changing its base URL."
                     }
                   },
                   "required": [
@@ -5026,7 +5441,7 @@
         },
         "responses": {
           "200": {
-            "description": "Updated model provider config document",
+            "description": "Updated model provider config document (API keys masked)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5311,7 +5726,8 @@
                             }
                           }
                         }
-                      }
+                      },
+                      "description": "API keys are replaced by __BRIDGE_SAVED_API_KEY__. Return that marker unchanged to retain the same provider's local key; supply a new key when changing its base URL."
                     }
                   },
                   "required": [
@@ -5320,6 +5736,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Saved API key missing or connection address changed"
           }
         }
       }

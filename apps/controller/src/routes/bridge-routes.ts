@@ -5,11 +5,27 @@ import { type OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { modelProviderConfigSchema } from "@nexu/shared";
 import type { ControllerContainer } from "../app/container.js";
 import {
+  bridgeModelListResultSchema,
+  listBridgeModels,
+} from "../services/bridge-model-list.js";
+import {
+  bridgeModelOptionsSchema,
+  savedModelOptions,
+} from "../services/bridge-model-options.js";
+import {
+  bridgeModelConnectionSchema,
   bridgeModelInputSchema,
   bridgeModelResultSchema,
   resolveBridgeBaseUrl,
   testBridgeModel,
 } from "../services/bridge-model-test.js";
+import {
+  resolveSavedModelConnection,
+  savedModelConnectionSchema,
+  savedModelConnections,
+  savedModelConnectionsSchema,
+} from "../services/bridge-saved-models.js";
+import { ProviderConfigConflictError } from "../store/nexu-config-store.js";
 import type { ControllerBindings } from "../types.js";
 
 const activitySchema = z.object({
@@ -20,6 +36,8 @@ const activitySchema = z.object({
   lastSuccessfulReplyAt: z.string().datetime().nullable(),
   error: z.enum(["generation", "send"]).nullable(),
   trigger: z.literal("proactive").optional(),
+  cancelled: z.boolean().optional(),
+  warning: z.literal("sticker").optional(),
 });
 
 export function registerBridgeRoutes(
@@ -27,6 +45,76 @@ export function registerBridgeRoutes(
   container: ControllerContainer,
 ): void {
   let savingModel = false;
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/api/v1/bridge/models/saved",
+      tags: ["Bridge"],
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: savedModelConnectionsSchema },
+          },
+          description: "Saved compatible connections without credentials",
+        },
+      },
+    }),
+    async (c) =>
+      c.json(
+        savedModelConnections(await container.configStore.getConfig()),
+        200,
+      ),
+  );
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/bridge/models/discover",
+      tags: ["Bridge"],
+      request: {
+        body: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: z.union([
+                savedModelConnectionSchema,
+                bridgeModelConnectionSchema.strict(),
+              ]),
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: bridgeModelListResultSchema },
+          },
+          description:
+            "Read provider model IDs without saving configuration or generating text",
+        },
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      if (!("savedProviderKey" in body))
+        return c.json(await listBridgeModels(body), 200);
+      const saved = resolveSavedModelConnection(
+        await container.configStore.getConfig(),
+        body,
+      );
+      if (!saved)
+        return c.json(
+          {
+            ok: false,
+            code: "config_changed",
+            message: "已保存 API 已更改或不可用，请刷新页面后重试。",
+            models: [],
+            incomplete: false,
+          },
+          200,
+        );
+      return c.json(await listBridgeModels(saved.input), 200);
+    },
+  );
   const pauseFile = path.join(
     container.env.openclawStateDir ?? ".",
     "bridge-control.json",
@@ -207,7 +295,17 @@ export function registerBridgeRoutes(
       request: {
         body: {
           required: true,
-          content: { "application/json": { schema: bridgeModelInputSchema } },
+          content: {
+            "application/json": {
+              schema: z.union([
+                savedModelConnectionSchema.extend({
+                  model: z.string().trim().min(1).max(200),
+                  options: bridgeModelOptionsSchema.optional(),
+                }),
+                bridgeModelInputSchema.strict(),
+              ]),
+            },
+          },
         },
       },
       responses: {
@@ -232,36 +330,112 @@ export function registerBridgeRoutes(
       savingModel = true;
       let saved = false;
       try {
-        const input = c.req.valid("json");
+        const body = c.req.valid("json");
+        const stored =
+          "savedProviderKey" in body
+            ? resolveSavedModelConnection(
+                await container.configStore.getConfig(),
+                body,
+              )
+            : null;
+        if ("savedProviderKey" in body && !stored)
+          return c.json(
+            {
+              ok: false,
+              saved: false,
+              code: "config_changed",
+              message: "已保存 API 已更改或不可用，请刷新页面后重试。",
+            },
+            200,
+          );
+        const input = stored
+          ? {
+              ...stored.input,
+              model: body.model,
+              options:
+                body.options ?? savedModelOptions(stored.provider)[body.model],
+            }
+          : (body as z.infer<typeof bridgeModelInputSchema>);
         const tested = await testBridgeModel(input);
         if (!tested.ok) return c.json(tested, 200);
+        const baseUrl = resolveBridgeBaseUrl(input);
+        const preset =
+          baseUrl === "https://dashscope.aliyuncs.com/compatible-mode/v1"
+            ? "bailian"
+            : baseUrl === "https://api.siliconflow.cn/v1"
+              ? "siliconflow"
+              : "bridge";
         const key =
-          input.provider === "deepseek" ? "deepseek" : "custom-openai/bridge";
-        const provider = modelProviderConfigSchema.parse({
-          providerTemplateId: input.provider,
-          ...(input.provider === "custom-openai"
-            ? { instanceId: "bridge" }
-            : {}),
-          enabled: true,
-          auth: "api-key",
-          api: "openai-completions",
-          apiKey: input.apiKey,
-          baseUrl: resolveBridgeBaseUrl(input),
-          models: [
-            {
-              id: input.model,
-              name: input.model,
-              contextWindow: 32768,
-              maxTokens: 4096,
-            },
-          ],
-        });
-        const modelId = `${key}/${input.model}`;
-        await container.configStore.saveProviderAndSelectModel(
-          key,
-          provider,
-          modelId,
+          stored?.key ??
+          (input.provider === "deepseek"
+            ? "deepseek"
+            : `custom-openai/${preset}`);
+        const provider = modelProviderConfigSchema.parse(
+          stored
+            ? {
+                ...stored.provider,
+                models: stored.provider.models.some(
+                  (entry) => entry.id === input.model,
+                )
+                  ? stored.provider.models
+                  : [
+                      ...stored.provider.models,
+                      {
+                        id: input.model,
+                        name: input.model,
+                        contextWindow: 32768,
+                        maxTokens: 4096,
+                      },
+                    ],
+              }
+            : {
+                providerTemplateId: input.provider,
+                ...(input.provider === "custom-openai"
+                  ? { instanceId: preset }
+                  : {}),
+                enabled: true,
+                auth: "api-key",
+                api: "openai-completions",
+                apiKey: input.apiKey,
+                baseUrl,
+                ...(preset === "bailian"
+                  ? { displayName: "阿里云百炼（北京）" }
+                  : preset === "siliconflow"
+                    ? { displayName: "硅基流动（中国大陆）" }
+                    : {}),
+                models: [
+                  {
+                    id: input.model,
+                    name: input.model,
+                    contextWindow: 32768,
+                    maxTokens: 4096,
+                  },
+                ],
+              },
         );
+        if (input.options) {
+          provider.metadata = {
+            ...provider.metadata,
+            bridgeModelOptions: {
+              ...savedModelOptions(provider),
+              [input.model]: input.options,
+            },
+          };
+        }
+        const modelId = `${key}/${input.model}`;
+        if (stored)
+          await container.configStore.saveProviderAndSelectModel(
+            key,
+            provider,
+            modelId,
+            stored.provider,
+          );
+        else
+          await container.configStore.saveProviderAndSelectModel(
+            key,
+            provider,
+            modelId,
+          );
         saved = true;
         await container.openclawSyncService.syncAll();
         await container.desktopLocalService.restartRuntime();
@@ -270,12 +444,24 @@ export function registerBridgeRoutes(
             ok: true,
             saved: true,
             code: "saved",
-            message: "测试通过，模型已保存并选中。请继续微信扫码。",
+            message: stored
+              ? "测试通过，已切换模型，现有会话保留。后台正在重新连接。"
+              : "测试通过，模型已保存并选中。请继续微信扫码。",
             modelId,
           },
           200,
         );
-      } catch {
+      } catch (error) {
+        if (error instanceof ProviderConfigConflictError)
+          return c.json(
+            {
+              ok: false,
+              saved: false,
+              code: "config_changed",
+              message: "API 配置在测试期间发生了变化，请刷新页面后重试。",
+            },
+            200,
+          );
         return c.json(
           {
             ok: false,

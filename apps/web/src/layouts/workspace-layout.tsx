@@ -15,6 +15,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { BridgeMark } from "../components/bridge/bridge-mark";
+import { DiagnosticsButton } from "../components/bridge/diagnostics-button";
 import { ThemePicker } from "../components/bridge/theme-picker";
 import { WhaleCompanion } from "../components/bridge/whale-companion";
 import {
@@ -118,8 +119,8 @@ export function WorkspaceLayout() {
           <div className="bridge-whale-note">
             <WhaleCompanion />
             <div>
-              <strong>小鲸鱼，在这里。</strong>
-              <span>把日常，聊得软乎乎。</span>
+              <strong>大肥鱼</strong>
+              <span>有事说事，没事唠两句。</span>
             </div>
           </div>
           <div className="bridge-local-note">
@@ -132,7 +133,7 @@ export function WorkspaceLayout() {
               <br />
               让连接在本机轻松完成。
             </p>
-            <span className="bridge-local-caption">MADE FOR YOUR EVERYDAY</span>
+            <span className="bridge-local-caption">本机运行 · API 自备</span>
           </div>
           <button
             type="button"
@@ -159,6 +160,7 @@ export function WorkspaceLayout() {
           </div>
           <div className="bridge-topbar-actions">
             <ThemePicker />
+            <DiagnosticsButton />
             <button
               type="button"
               className="bridge-motion-toggle bridge-mobile-help"
@@ -191,9 +193,9 @@ export function WorkspaceLayout() {
       </div>
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent className="bridge-dialog">
-          <span className="bridge-eyebrow">A LITTLE HELP</span>
+          <span className="bridge-eyebrow">使用说明</span>
           <DialogTitle className="bridge-dialog-title">
-            很快，就能聊起来。
+            两步完成接入
           </DialogTitle>
           <DialogDescription className="bridge-dialog-description">
             Bridge 在你的电脑上连接模型与微信。准备自己的 API

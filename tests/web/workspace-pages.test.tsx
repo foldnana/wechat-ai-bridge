@@ -123,4 +123,34 @@ describe("separate workspace pages", () => {
     expect(html).toContain("暂时无法读取记录");
     expect(html).not.toContain('class="bridge-record"');
   });
+  it("distinguishes cancelled replies and optional sticker warnings from delivery errors", () => {
+    const html = renderPage(<ActivityPage />, (client) => {
+      client.setQueryData(["bridge-activity"], {
+        activities: [
+          {
+            channelId: "sticker",
+            activity: {
+              receivedAt: Date.now(),
+              sentAt: Date.now(),
+              error: null,
+              warning: "sticker",
+            },
+          },
+          {
+            channelId: "cancel",
+            activity: {
+              receivedAt: Date.now(),
+              sentAt: null,
+              error: null,
+              cancelled: true,
+            },
+          },
+        ],
+      });
+    });
+    expect(html).toContain("已停止");
+    expect(html).toContain("回答已发送，附带表情未发出");
+    expect(html).not.toContain("发送失败，请检查微信授权");
+    expect(html).not.toContain(">处理中<");
+  });
 });

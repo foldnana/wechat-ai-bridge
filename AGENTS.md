@@ -9,9 +9,14 @@ This repository is wechat-ai-bridge, a Windows-first local WeChat AI connection 
 - BYOK only. No hosted AI quota, cloud hosting, required Nexu account, credits, rewards or promotional integrations.
 - First release: Windows and personal WeChat ClawBot only. Ordinary group bots and ordinary discoverable WeChat accounts are not promised.
 - User-authored presets, new conversations and explicit local data cleanup; no proprietary chat persona service.
+- Default to the editable 大肥鱼 persona and automatic conversation pacing. User presets override the template; persona and advanced behavior settings are never onboarding requirements.
+- First launch uses the 大肥鱼蓝 interface theme regardless of the configured model. Preserve explicitly saved palette preferences; following the model is optional.
 - Disable command execution, arbitrary filesystem tools, browser control, skill installation and cron by default in the actual runtime, not just UI or prompts.
 - Do not upload chat content or inherit upstream analytics endpoints by default.
 - No mini-program or remote control in the first release.
+- Deliver Windows as a ZIP containing the complete runnable folder (extract and run). Do not add code signing, an installer or automatic updates. Diagnostic export hardening and OS credential encryption are deferred; the current credential scope is masking local provider-config API responses while retaining saved-key reuse.
+
+- During development, do not rebuild EXEs or ZIPs for every change. Package only when explicitly requested or for the final release stage.
 
 ## Engineering
 

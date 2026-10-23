@@ -13,6 +13,7 @@ import {
   type SleepGuardSnapshot,
   createInitialSleepGuardSnapshot,
 } from "./sleep-guard";
+import { getStartupTimings } from "./startup-timing";
 
 type DesktopColdStartStatus = "idle" | "running" | "succeeded" | "failed";
 
@@ -53,6 +54,7 @@ type DesktopEmbeddedContentSnapshot = {
 };
 
 type DesktopDiagnosticsSnapshot = {
+  startupTimings: ReturnType<typeof getStartupTimings>;
   updatedAt: string;
   isPackaged: boolean;
   proxy: ProxyDiagnosticsSnapshot | null;
@@ -342,6 +344,7 @@ export class DesktopDiagnosticsReporter {
 
     return {
       updatedAt: nowIso(),
+      startupTimings: getStartupTimings(),
       isPackaged: app.isPackaged,
       proxy: this.proxy
         ? {

@@ -1104,8 +1104,8 @@ export function ModelsPage() {
         <div className="mb-6">
           <div className="bridge-page-heading">
             <div>
-              <span className="bridge-eyebrow">MORE CONNECTIONS</span>
-              <h1>更多模型，同样简单。</h1>
+              <span className="bridge-eyebrow">高级配置</span>
+              <h1>模型与服务商管理</h1>
               <p>管理已有供应商，或添加你熟悉的模型服务。</p>
             </div>
             <Link className="bridge-back-link" to="/workspace/models">

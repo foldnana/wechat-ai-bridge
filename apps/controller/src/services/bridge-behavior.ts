@@ -5,13 +5,17 @@ import { z } from "@hono/zod-openapi";
 
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 export const behaviorSchema = z.object({
-  persona: z.enum(["auto", "whale", "none"]).default("auto"),
+  persona: z.enum(["auto", "whale", "none"]).default("whale"),
   incoming: z
-    .object({ waitMs: z.number().int().min(0).max(60000).default(12000) })
-    .default({}),
+    .object({
+      // A saved legacy waitMs remains fixed. Only new configurations use auto.
+      mode: z.enum(["auto", "fixed"]).default("fixed"),
+      waitMs: z.number().int().min(0).max(60000).default(4000),
+    })
+    .default({ mode: "auto" }),
   delivery: z
     .object({
-      mode: z.enum(["single", "natural"]).default("single"),
+      mode: z.enum(["single", "natural"]).default("natural"),
       maxBubbles: z.number().int().min(2).max(3).default(2),
       pauseMs: z.number().int().min(500).max(3000).default(1200),
     })
@@ -48,7 +52,7 @@ export const stickerSchema = z.object({
   id: z.string().uuid(),
   label: z.string().trim().min(1).max(30),
   tags: z.string().trim().min(1).max(120),
-  extension: z.enum(["png", "jpg", "gif"]),
+  extension: z.enum(["png", "jpg", "gif", "webp"]),
 });
 export const stickerListSchema = z.array(stickerSchema).max(24);
 export const stickerInputSchema = z.object({
@@ -94,8 +98,10 @@ export async function writeBridgeJson(
 }
 export function decodeSticker(data: string) {
   const match =
-    /^data:image\/(png|jpeg|gif);base64,([A-Za-z0-9+/]+={0,2})$/.exec(data);
-  if (!match) throw new Error("请选择 PNG、JPEG 或 GIF 图片。");
+    /^data:image\/(png|jpeg|gif|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(
+      data,
+    );
+  if (!match) throw new Error("请选择 PNG、JPEG、GIF 或 WebP 图片。");
   const bytes = Buffer.from(match[2] ?? "", "base64");
   if (bytes.length > 2 * 1024 * 1024 || bytes.length < 16)
     throw new Error("图片应小于 2 MB，且是有效的图片文件。");
@@ -106,13 +112,21 @@ export function decodeSticker(data: string) {
           .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
       : match[1] === "jpeg"
         ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
-        : ["GIF87a", "GIF89a"].includes(bytes.subarray(0, 6).toString());
+        : match[1] === "webp"
+          ? bytes.subarray(0, 4).toString() === "RIFF" &&
+            bytes.subarray(8, 12).toString() === "WEBP" &&
+            ["VP8 ", "VP8L", "VP8X"].includes(
+              bytes.subarray(12, 16).toString(),
+            ) &&
+            bytes.readUInt32LE(4) + 8 === bytes.length
+          : ["GIF87a", "GIF89a"].includes(bytes.subarray(0, 6).toString());
   if (!valid) throw new Error("图片内容与格式不一致。");
   return {
     bytes,
     extension: (match[1] === "jpeg" ? "jpg" : match[1]) as
       | "png"
       | "jpg"
-      | "gif",
+      | "gif"
+      | "webp",
   };
 }

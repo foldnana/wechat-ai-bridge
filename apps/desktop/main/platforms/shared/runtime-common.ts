@@ -80,10 +80,12 @@ export async function runManagedColdStart({
     orchestrator.startOne("controller"),
     orchestrator.startOne("web"),
   ]);
+  logStartupStep("local-services:listening");
 
   diagnosticsReporter?.markColdStartRunning("waiting for controller readiness");
   logColdStart("waiting for controller readiness");
   await waitForControllerReadiness();
+  logStartupStep("controller:core-ready");
 
   const sessionId = rotateDesktopLogSession();
   logColdStart(`cold start session ready sessionId=${sessionId}`);

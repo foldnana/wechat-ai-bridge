@@ -12,7 +12,11 @@ import "./bridge-themes.css";
 import "./bridge-pages.css";
 import "./bridge-behavior.css";
 import "./bridge-whale.css";
-import { readBridgeTheme } from "./lib/bridge-theme";
+import {
+  readBridgeTheme,
+  readFollowModel,
+  resolveBridgeTheme,
+} from "./lib/bridge-theme";
 import "./lib/api";
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,7 +30,10 @@ const queryClient = new QueryClient({
 const root = document.getElementById("root");
 if (!root) throw new Error("Root element not found");
 document.title = "Bridge · 微信 AI 接入助手";
-document.documentElement.dataset.bridgeTheme = readBridgeTheme();
+document.documentElement.dataset.bridgeTheme = resolveBridgeTheme(
+  readBridgeTheme(),
+  readFollowModel(),
+);
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <LocaleProvider>

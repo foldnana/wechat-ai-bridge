@@ -138,7 +138,9 @@ function configurePackagedPaths(): void {
 
   const sessionDataPath = join(effectiveUserDataPath, "session");
   const logsPath = join(effectiveUserDataPath, "logs");
-  const nexuHomePath = getDesktopNexuHomeDir(effectiveUserDataPath);
+  const nexuHomePath = process.env.NEXU_HOME
+    ? resolve(process.env.NEXU_HOME)
+    : getDesktopNexuHomeDir(effectiveUserDataPath);
   const legacyPackagedNexuHomePath = getLegacyPackagedNexuHomeDir(
     effectiveUserDataPath,
   );

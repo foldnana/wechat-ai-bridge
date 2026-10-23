@@ -10,6 +10,7 @@ import {
   getDefaultProviderBaseUrls,
   getProviderRuntimePolicy,
   parseCustomProviderKey,
+  restoreModelProviderApiKeys,
   type updateAuthSourceSchema,
   type updateUserProfileSchema,
   type upsertProviderBodySchema,
@@ -28,6 +29,11 @@ import {
 } from "./schemas.js";
 
 type UpsertProviderBody = z.infer<typeof upsertProviderBodySchema>;
+export class ProviderConfigConflictError extends Error {
+  constructor() {
+    super("Provider configuration changed");
+  }
+}
 type StoredProviderResponse = z.infer<typeof storedProviderResponseSchema>;
 type UserProfileResponse = z.infer<typeof userProfileResponseSchema>;
 type UpdateUserProfileInput = z.infer<typeof updateUserProfileSchema>;
@@ -913,20 +919,30 @@ export class NexuConfigStore {
     providerKey: string,
     provider: ModelProviderConfig,
     modelId: string,
+    expectedProvider?: ModelProviderConfig,
   ): Promise<void> {
-    await this.store.update((config) => ({
-      ...config,
-      schemaVersion: Math.max(
-        config.schemaVersion,
-        CANONICAL_MODELS_PROVIDERS_CUTOVER_SCHEMA_VERSION,
-      ),
-      models: {
-        ...config.models,
-        providers: { ...config.models.providers, [providerKey]: provider },
-      },
-      runtime: { ...config.runtime, defaultModelId: modelId },
-      bots: config.bots.map((bot) => ({ ...bot, modelId, updatedAt: now() })),
-    }));
+    await this.store.update((config) => {
+      if (
+        expectedProvider &&
+        JSON.stringify(config.models.providers[providerKey]) !==
+          JSON.stringify(expectedProvider)
+      ) {
+        throw new ProviderConfigConflictError();
+      }
+      return {
+        ...config,
+        schemaVersion: Math.max(
+          config.schemaVersion,
+          CANONICAL_MODELS_PROVIDERS_CUTOVER_SCHEMA_VERSION,
+        ),
+        models: {
+          ...config.models,
+          providers: { ...config.models.providers, [providerKey]: provider },
+        },
+        runtime: { ...config.runtime, defaultModelId: modelId },
+        bots: config.bots.map((bot) => ({ ...bot, modelId, updatedAt: now() })),
+      };
+    });
   }
 
   async setModelProviderConfigDocument(
@@ -938,7 +954,7 @@ export class NexuConfigStore {
         config.schemaVersion,
         CANONICAL_MODELS_PROVIDERS_CUTOVER_SCHEMA_VERSION,
       ),
-      models,
+      models: restoreModelProviderApiKeys(models, config.models),
     }));
 
     return (await this.getConfig()).models;

@@ -4,8 +4,15 @@ import path from "node:path";
 import { WHALE_PERSONA, isDeepSeekModel } from "@nexu/shared/bridge-persona";
 import type { ControllerEnv } from "../app/env.js";
 import { logger } from "../lib/logger.js";
+import type { BridgeModelOptions } from "../services/bridge-model-options.js";
 
 export interface OpenClawRuntimeModelState {
+  requestOptions?: Array<{
+    provider: string;
+    model: string;
+    baseUrl: string;
+    options: BridgeModelOptions;
+  }>;
   selectedModelRef: string;
   promptNotice: string;
   noModelMessage: string | null;
@@ -80,6 +87,7 @@ export class OpenClawRuntimeModelWriter {
   async write(
     selectedModelRef: string,
     userPresets: Record<string, string> = {},
+    requestOptions: OpenClawRuntimeModelState["requestOptions"] = [],
   ): Promise<void> {
     await this.writeState({
       selectedModelRef,
@@ -87,6 +95,7 @@ export class OpenClawRuntimeModelWriter {
       noModelMessage: null,
       updatedAt: new Date().toISOString(),
       userPresets,
+      requestOptions,
       whalePersona: WHALE_PERSONA,
       deepseek: isDeepSeekModel(selectedModelRef),
     });

@@ -33,6 +33,53 @@ function setup(run = vi.fn().mockResolvedValue(undefined), wait = 12000) {
   };
 }
 describe("continuous inbound chat", () => {
+  it("automatically leaves a short gap for complete messages and combines followups", async () => {
+    vi.useFakeTimers();
+    const run = vi.fn().mockResolvedValue(undefined);
+    const inbox = new BridgeInbox({
+      run,
+      waitMs: () => 12000,
+      automatic: () => true,
+      version: () => "v1",
+      paused: () => false,
+      error: vi.fn(),
+    });
+    await inbox.add(msg("这件事怎么做？"));
+    await vi.advanceTimersByTimeAsync(2000);
+    await inbox.add(msg("补充一点，"));
+    await vi.advanceTimersByTimeAsync(6999);
+    expect(run).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(run.mock.calls[0]?.[0].item_list[0].text_item.text).toBe(
+      "这件事怎么做？\n补充一点，",
+    );
+    await inbox.add(msg("谢谢！"));
+    await vi.advanceTimersByTimeAsync(2499);
+    expect(run).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+  it("caps automatic gathering at 20 seconds even when text keeps arriving", async () => {
+    vi.useFakeTimers();
+    const run = vi.fn().mockResolvedValue(undefined);
+    const inbox = new BridgeInbox({
+      run,
+      waitMs: () => 12000,
+      automatic: () => true,
+      version: () => "v1",
+      paused: () => false,
+      error: vi.fn(),
+    });
+    await inbox.add(msg("第一句，"));
+    for (let i = 0; i < 3; i++) {
+      await vi.advanceTimersByTimeAsync(6000);
+      await inbox.add(msg("继续补充，"));
+    }
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(run).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(run).toHaveBeenCalledOnce();
+  });
   it("merges across polls only for the same peer and uses the final context token", async () => {
     const f = setup();
     await f.inbox.add(msg("明天面试", "alice", "old"));

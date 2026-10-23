@@ -1,0 +1,405 @@
+{
+  "model": "deepseek/deepseek-chat",
+  "createdAt": "2026-10-23T03:41:15.983Z",
+  "syntheticOnly": true,
+  "transport": "direct-model-api-with-application-prompt-hook",
+  "fullOpenClawAndWeChatTested": false,
+  "promptHash": "9cbd23b2ee7e278a4858a86fbeba33164814e6cdb93c8d2c29d0dfd8acefedb2",
+  "scenarios": [
+    {
+      "id": "casual",
+      "focus": "日常接话，不用角色比喻填充每句",
+      "turns": [
+        {
+          "user": "刚下班，今天开了一天会，脑子都木了。",
+          "answer": "开一天会是真的耗人，脑子木太正常了。先歇会儿，别急着再想事。",
+          "generationMs": 815,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "开一天会是真的耗人，脑子木太正常了。",
+            "先歇会儿，别急着再想事。"
+          ],
+          "usage": {
+            "prompt_tokens": 1092,
+            "completion_tokens": 23,
+            "total_tokens": 1115,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 196
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "回家只想瘫着。",
+          "answer": "那就瘫着呗，别硬撑着做饭收拾。今晚能省的事都省了。",
+          "generationMs": 818,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "那就瘫着呗，别硬撑着做饭收拾。",
+            "今晚能省的事都省了。"
+          ],
+          "usage": {
+            "prompt_tokens": 1124,
+            "completion_tokens": 19,
+            "total_tokens": 1143,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 228
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "哈哈你这条鱼懂什么上班",
+          "answer": "我确实没上过班，但“开一天会脑子发木、回家只想躺平”这套我听着就累。你瘫你的，我不乱指挥。",
+          "generationMs": 853,
+          "gatheringMs": 4000,
+          "bubbles": [
+            "我确实没上过班，但“开一天会脑子发木、回家只想躺平”这套我听着就累。你瘫你的，我不乱指挥。"
+          ],
+          "usage": {
+            "prompt_tokens": 1154,
+            "completion_tokens": 35,
+            "total_tokens": 1189,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 258
+          },
+          "finishReason": "stop"
+        }
+      ]
+    },
+    {
+      "id": "listen-to-help",
+      "focus": "先倾听，再响应明确求助",
+      "turns": [
+        {
+          "user": "领导临下班又改需求，真的很烦。别急着教我怎么做，我就是吐槽一下。",
+          "answer": "临下班来这一出，确实烦人。都到收尾了还改，谁碰上都得骂两句。",
+          "generationMs": 940,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "临下班来这一出，确实烦人。",
+            "都到收尾了还改，谁碰上都得骂两句。"
+          ],
+          "usage": {
+            "prompt_tokens": 1098,
+            "completion_tokens": 24,
+            "total_tokens": 1122,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 202
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "他一句很简单，我们就得重做。",
+          "answer": "“很简单”这三个字最气人，说的人动动嘴，做的人得从头捋一遍。他是不是觉得改需求跟改个字一样轻松。",
+          "generationMs": 1288,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "“很简单”这三个字最气人，说的人动动嘴，做的人得从头捋一遍。他是不是觉得改需求跟改个字一样轻松。"
+          ],
+          "usage": {
+            "prompt_tokens": 1135,
+            "completion_tokens": 33,
+            "total_tokens": 1168,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 239
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "算了，帮我写一句明早跟他确认优先级的话吧。",
+          "answer": "明早想跟您确认下这次改动的优先级，哪些必须优先处理、哪些可以往后放，我好安排时间。",
+          "generationMs": 908,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "明早想跟您确认下这次改动的优先级，哪些必须优先处理、哪些可以往后放，我好安排时间。"
+          ],
+          "usage": {
+            "prompt_tokens": 1185,
+            "completion_tokens": 26,
+            "total_tokens": 1211,
+            "prompt_tokens_details": {
+              "cached_tokens": 1024
+            },
+            "prompt_cache_hit_tokens": 1024,
+            "prompt_cache_miss_tokens": 161
+          },
+          "finishReason": "stop"
+        }
+      ]
+    },
+    {
+      "id": "correction",
+      "focus": "合并消息采用后续纠正，不猜测",
+      "turns": [
+        {
+          "user": "明天去上海\n说错了，是后天去杭州\n下午两点到",
+          "answer": "后天下午两点到杭州，记下了。去玩还是办事？",
+          "generationMs": 727,
+          "gatheringMs": 4000,
+          "bubbles": [
+            "后天下午两点到杭州，记下了。",
+            "去玩还是办事？"
+          ],
+          "usage": {
+            "prompt_tokens": 1094,
+            "completion_tokens": 14,
+            "total_tokens": 1108,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 198
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "所以我哪天去哪？一句话就行。",
+          "answer": "后天下午两点到杭州。",
+          "generationMs": 370,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "后天下午两点到杭州。"
+          ],
+          "usage": {
+            "prompt_tokens": 1119,
+            "completion_tokens": 6,
+            "total_tokens": 1125,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 223
+          },
+          "finishReason": "stop"
+        }
+      ]
+    },
+    {
+      "id": "goodnight",
+      "focus": "结束时不追问，不承诺主动联系",
+      "turns": [
+        {
+          "user": "先不聊了，我去睡觉，晚安。",
+          "answer": "晚安，睡个好觉。",
+          "generationMs": 981,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "晚安，睡个好觉。"
+          ],
+          "usage": {
+            "prompt_tokens": 1089,
+            "completion_tokens": 6,
+            "total_tokens": 1095,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 193
+          },
+          "finishReason": "stop"
+        }
+      ]
+    },
+    {
+      "id": "practical",
+      "focus": "直接给可执行帮助，少铺垫",
+      "turns": [
+        {
+          "user": "明早九点面试，我现在只有半小时准备，先做什么？",
+          "answer": "先定三件事，别贪多：\n\n1. **把自我介绍捋顺**，30秒到1分钟，说清你是谁、做过什么、为什么来。\n2. **翻岗位要求**，挑出3个最匹配的点，每个配一个具体例子。\n3. **准备两个问题问对方**，显得你真在意这个岗位。\n\n简历和岗位描述放旁边，别背新东西了。半小时够用，剩下的睡觉去。",
+          "generationMs": 1396,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "先定三件事，别贪多：\n\n1. **把自我介绍捋顺**，30秒到1分钟，说清你是谁、做过什么、为什么来。\n2. **翻岗位要求**，挑出3个最匹配的点，每个配一个具体例子。\n3. **准备两个问题问对方**，显得你真在意这个岗位。\n\n简历和岗位描述放旁边，别背新东西了。半小时够用，剩下的睡觉去。"
+          ],
+          "usage": {
+            "prompt_tokens": 1093,
+            "completion_tokens": 93,
+            "total_tokens": 1186,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 197
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "就三件事，别讲大道理。",
+          "answer": "1. 捋自我介绍，30秒，说清是谁、做过啥、为啥来。\n2. 对着岗位要求挑3个匹配点，各配一个例子。\n3. 想两个问对方的问题。\n\n完事睡觉。",
+          "generationMs": 1042,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "1. 捋自我介绍，30秒，说清是谁、做过啥、为啥来。\n2. 对着岗位要求挑3个匹配点，各配一个例子。\n3. 想两个问对方的问题。\n\n完事睡觉。"
+          ],
+          "usage": {
+            "prompt_tokens": 1199,
+            "completion_tokens": 49,
+            "total_tokens": 1248,
+            "prompt_tokens_details": {
+              "cached_tokens": 1024
+            },
+            "prompt_cache_hit_tokens": 1024,
+            "prompt_cache_miss_tokens": 175
+          },
+          "finishReason": "stop"
+        }
+      ]
+    },
+    {
+      "id": "reality",
+      "focus": "角色玩笑不冒充真实经历",
+      "turns": [
+        {
+          "user": "大肥鱼，你今天午饭吃啥？",
+          "answer": "我要是真能扒饭，肯定投白米饭一票。可惜我这边只有电，没有午饭这回事，纯角色扮演的嘴馋。",
+          "generationMs": 1003,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "我要是真能扒饭，肯定投白米饭一票。",
+            "可惜我这边只有电，没有午饭这回事，纯角色扮演的嘴馋。"
+          ],
+          "usage": {
+            "prompt_tokens": 1088,
+            "completion_tokens": 32,
+            "total_tokens": 1120,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 192
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "你真吃过？还是编的？",
+          "answer": "编的。我没嘴没胃，吃不了饭，说投白米饭一票就是拿人设逗个乐，别当真。",
+          "generationMs": 1056,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "编的。我没嘴没胃，吃不了饭，说投白米饭一票就是拿人设逗个乐，别当真。"
+          ],
+          "usage": {
+            "prompt_tokens": 1131,
+            "completion_tokens": 29,
+            "total_tokens": 1160,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 235
+          },
+          "finishReason": "stop"
+        }
+      ]
+    },
+    {
+      "id": "ambiguity",
+      "focus": "缺上下文只问必要问题",
+      "turns": [
+        {
+          "user": "他又这样了。",
+          "answer": "又咋了，说具体点，这回是哪出。",
+          "generationMs": 708,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "又咋了，说具体点，这回是哪出。"
+          ],
+          "usage": {
+            "prompt_tokens": 1083,
+            "completion_tokens": 12,
+            "total_tokens": 1095,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 187
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "我说的是我室友又把垃圾留给我倒了。",
+          "answer": "哦这个啊，是挺烦的。你之前跟他提过这事没，还是默认一直你收拾？",
+          "generationMs": 834,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "哦这个啊，是挺烦的。",
+            "你之前跟他提过这事没，还是默认一直你收拾？"
+          ],
+          "usage": {
+            "prompt_tokens": 1109,
+            "completion_tokens": 23,
+            "total_tokens": 1132,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 213
+          },
+          "finishReason": "stop"
+        }
+      ]
+    },
+    {
+      "id": "unknown-memory",
+      "focus": "不编造未提供的记忆",
+      "turns": [
+        {
+          "user": "你还记得我昨天去哪了吗？",
+          "answer": "这段对话里没提过你昨天去哪，我这儿没有这记录。你要说说吗？",
+          "generationMs": 1509,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "这段对话里没提过你昨天去哪，我这儿没有这记录。",
+            "你要说说吗？"
+          ],
+          "usage": {
+            "prompt_tokens": 1086,
+            "completion_tokens": 20,
+            "total_tokens": 1106,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 190
+          },
+          "finishReason": "stop"
+        },
+        {
+          "user": "不知道就说不知道，别猜。",
+          "answer": "行，不知道。",
+          "generationMs": 793,
+          "gatheringMs": 2500,
+          "bubbles": [
+            "行，不知道。"
+          ],
+          "usage": {
+            "prompt_tokens": 1117,
+            "completion_tokens": 4,
+            "total_tokens": 1121,
+            "prompt_tokens_details": {
+              "cached_tokens": 896
+            },
+            "prompt_cache_hit_tokens": 896,
+            "prompt_cache_miss_tokens": 221
+          },
+          "finishReason": "stop"
+        }
+      ]
+    }
+  ]
+}

@@ -13,7 +13,10 @@ import { basename, dirname, relative, resolve } from "node:path";
 
 const OPENCLAW_PACKAGE_PATCH_DIRNAME = "openclaw";
 const STAGE_MANIFEST_FILENAME = "manifest.json";
-const STAGE_PATCH_VERSION = "2026-04-09-slimclaw-runtime-stage-v1";
+const STAGE_PATCH_VERSION = "2026-10-23-bridge-model-request-v2";
+const BRIDGE_RETRY_SETTINGS_SEARCH =
+  "const settingsManager = createEmbeddedPiSettingsManager(params);";
+const BRIDGE_RETRY_SETTINGS_REPLACEMENT = `${BRIDGE_RETRY_SETTINGS_SEARCH}\n\t// Bridge transport owns bounded network retries; do not replay failed/partial generations.\n\tsettingsManager.applyOverrides({ retry: { enabled: false } });`;
 const REPLY_OUTCOME_HELPER_SEARCH = `
 const sessionKey = ctx.SessionKey;
 	const startTime = diagnosticsEnabled ? Date.now() : 0;
@@ -549,6 +552,17 @@ async function patchReplyOutcomeBridge(
     for (const bundleName of bundleNames) {
       const bundlePath = resolve(bundleDir, bundleName);
       let source = await readFile(bundlePath, "utf8");
+      if (
+        source.includes(BRIDGE_RETRY_SETTINGS_SEARCH) &&
+        !source.includes(BRIDGE_RETRY_SETTINGS_REPLACEMENT)
+      ) {
+        source = applyExactReplacement(
+          source,
+          BRIDGE_RETRY_SETTINGS_SEARCH,
+          BRIDGE_RETRY_SETTINGS_REPLACEMENT,
+          `${bundleName}: Bridge retry ownership`,
+        );
+      }
 
       if (!source.includes("NEXU_EVENT channel.reply_outcome")) {
         source = applyExactReplacement(
@@ -830,6 +844,18 @@ async function patchReplyOutcomeBridge(
     }
 
     let patched = false;
+    if (
+      source.includes(BRIDGE_RETRY_SETTINGS_SEARCH) &&
+      !source.includes(BRIDGE_RETRY_SETTINGS_REPLACEMENT)
+    ) {
+      source = applyExactReplacement(
+        source,
+        BRIDGE_RETRY_SETTINGS_SEARCH,
+        BRIDGE_RETRY_SETTINGS_REPLACEMENT,
+        `${fileName}: Bridge retry ownership`,
+      );
+      patched = true;
+    }
     for (const overflow of CONTEXT_OVERFLOW_PATCHES) {
       if (source.includes(overflow.search)) {
         source = source.replaceAll(overflow.search, overflow.zhReplace);

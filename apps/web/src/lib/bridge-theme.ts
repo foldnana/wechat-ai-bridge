@@ -52,17 +52,17 @@ export function resolveBridgeTheme(
 
 export function readFollowModel(): boolean {
   try {
-    return localStorage.getItem("bridge-theme-follow-model") !== "off";
+    return localStorage.getItem("bridge-theme-follow-model") === "on";
   } catch {
-    return true;
+    return false;
   }
 }
 
 export function readBridgeTheme(): BridgeTheme {
   try {
     const saved = localStorage.getItem("bridge-theme");
-    return BRIDGE_THEMES.find((theme) => theme.id === saved)?.id ?? "forest";
+    return BRIDGE_THEMES.find((theme) => theme.id === saved)?.id ?? "whale";
   } catch {
-    return "forest";
+    return "whale";
   }
 }

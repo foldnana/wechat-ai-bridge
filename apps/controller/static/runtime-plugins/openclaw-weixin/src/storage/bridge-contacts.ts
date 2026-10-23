@@ -14,7 +14,10 @@ const settings = z.object({
   proactive: z.enum(["inherit", "off"]).default("inherit"),
   topicMode: z.enum(["inherit", "recent", "greeting"]).default("inherit"),
 });
-const profile = z.object({ revision: z.string().min(1).max(80), settings });
+const profile = z.object({ revision: z.string().min(1).max(80), replyRevision: z.string().min(1).max(80).optional(), settings });
+export function contactReplyRevision(value: z.infer<typeof profile> | null) {
+  return value?.replyRevision ?? value?.revision;
+}
 export function contactKey(account: string, peer: string) {
   return `${account}\0${peer}`;
 }

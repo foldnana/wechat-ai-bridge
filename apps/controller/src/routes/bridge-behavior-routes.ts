@@ -8,11 +8,11 @@ import {
   behaviorSchema,
   decodeSticker,
   readBehavior,
-  readStickers,
   stickerInputSchema,
   stickerListSchema,
   writeBridgeJson,
 } from "../services/bridge-behavior.js";
+import { ensureDefaultStickers } from "../services/bridge-default-stickers.js";
 import type { ControllerBindings } from "../types.js";
 
 export function registerBridgeBehaviorRoutes(
@@ -107,7 +107,8 @@ export function registerBridgeBehaviorRoutes(
       tags: ["Bridge"],
       responses: listResponse,
     }),
-    async (c) => c.json(await readStickers(root), 200),
+    async (c) =>
+      c.json(await serialize(() => ensureDefaultStickers(root)), 200),
   );
   app.use("/api/v1/bridge/stickers", bodyLimit({ maxSize: 2_900_000 }));
   app.openapi(
@@ -128,7 +129,7 @@ export function registerBridgeBehaviorRoutes(
       try {
         const { bytes, extension } = decodeSticker(input.data);
         const items = await serialize(async () => {
-          const list = await readStickers(root);
+          const list = await ensureDefaultStickers(root);
           if (list.length >= 24)
             throw new Error("最多保存 24 张表情，请先移除不需要的图片。");
           const id = randomUUID();
@@ -166,7 +167,7 @@ export function registerBridgeBehaviorRoutes(
     async (c) => {
       const id = c.req.valid("param").id;
       const items = await serialize(async () => {
-        const list = await readStickers(root);
+        const list = await ensureDefaultStickers(root);
         const item = list.find((s) => s.id === id);
         const next = list.filter((s) => s.id !== id);
         await writeBridgeJson(root, "bridge-stickers.json", next);
@@ -183,7 +184,7 @@ export function registerBridgeBehaviorRoutes(
     },
   );
   app.get("/api/v1/bridge/stickers/:id/image", async (c) => {
-    const item = (await readStickers(root)).find(
+    const item = (await serialize(() => ensureDefaultStickers(root))).find(
       (s) => s.id === c.req.param("id"),
     );
     if (!item) return c.notFound();

@@ -252,8 +252,8 @@ describe("local bridge setup", () => {
       { authorized: true, ready: true },
       "wechat",
     );
-    expect(html).toContain("微信，已连接。");
-    expect(html).toContain("可选试聊");
+    expect(html).toContain("<h2>微信已连接</h2>");
+    expect(html).toContain("可选，不影响配置完成");
     expect(html).toContain("复制示例消息");
     expect(html).not.toContain("获取微信授权二维码");
   });
@@ -263,8 +263,8 @@ describe("local bridge setup", () => {
       { authorized: true, ready: true, serviceError: true },
       "wechat",
     );
-    expect(html).toContain("授权已保存。");
+    expect(html).toContain("<h2>授权已保存</h2>");
     expect(html).toContain("本地服务需要检查");
-    expect(html).not.toContain("微信，已连接。");
+    expect(html).not.toContain("<h2>微信已连接</h2>");
   });
 });

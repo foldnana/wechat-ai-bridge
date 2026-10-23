@@ -1,0 +1,37 @@
+[
+  {
+    "id": "9c786dee-6910-41fc-a269-55d794879205",
+    "label": "大肥鱼·吃饭时间",
+    "tags": "吃饭、饿了、干饭、午饭晚饭；不虚构正在吃饭",
+    "extension": "png",
+    "file": "meal.png"
+  },
+  {
+    "id": "9c786dee-6910-41fc-a269-55d794879206",
+    "label": "大肥鱼·你好呀",
+    "tags": "打招呼、欢迎、礼貌回应；不用于难过安慰",
+    "extension": "png",
+    "file": "hello.png"
+  },
+  {
+    "id": "9c786dee-6910-41fc-a269-55d794879207",
+    "label": "大肥鱼·歇一会儿",
+    "tags": "休息、放松、忙完了、陪伴；不强行安排休息",
+    "extension": "png",
+    "file": "rest.png"
+  },
+  {
+    "id": "9c786dee-6910-41fc-a269-55d794879208",
+    "label": "大肥鱼·吃什么呢",
+    "tags": "吃什么、想吃饭、等开饭、讨论美食",
+    "extension": "png",
+    "file": "hungry.png"
+  },
+  {
+    "id": "9c786dee-6910-41fc-a269-55d794879209",
+    "label": "大肥鱼·没吃饱喵",
+    "tags": "饿了、干饭、没吃饱、被叫大肥鱼时自嘲；不用于讽刺或指责用户",
+    "extension": "webp",
+    "file": "not-full.webp"
+  }
+]

@@ -1,11 +1,19 @@
 import { z } from "@hono/zod-openapi";
 import { proxyFetch } from "../lib/proxy-fetch.js";
+import {
+  bridgeModelOptionsSchema,
+  bridgeThinkingPayload,
+  supportsBridgeThinking,
+} from "./bridge-model-options.js";
 
-export const bridgeModelInputSchema = z.object({
+export const bridgeModelConnectionSchema = z.object({
   provider: z.enum(["deepseek", "custom-openai"]).default("deepseek"),
   apiKey: z.string().trim().min(1).max(4096),
-  model: z.string().trim().min(1).max(200).default("deepseek-chat"),
   baseUrl: z.string().url().optional(),
+});
+export const bridgeModelInputSchema = bridgeModelConnectionSchema.extend({
+  model: z.string().trim().min(1).max(200).default("deepseek-chat"),
+  options: bridgeModelOptionsSchema.optional(),
 });
 
 export const bridgeModelResultSchema = z.object({
@@ -19,7 +27,9 @@ export const bridgeModelResultSchema = z.object({
 export type BridgeModelInput = z.infer<typeof bridgeModelInputSchema>;
 export type BridgeModelResult = z.infer<typeof bridgeModelResultSchema>;
 
-export function resolveBridgeBaseUrl(input: BridgeModelInput): string {
+export function resolveBridgeBaseUrl(
+  input: z.infer<typeof bridgeModelConnectionSchema>,
+): string {
   const url = new URL(
     input.provider === "deepseek"
       ? "https://api.deepseek.com"
@@ -55,23 +65,68 @@ export async function testBridgeModel(
       "请填写 HTTPS 接口基础地址；本机接口可使用 HTTP。地址不要包含密钥、查询参数或 /chat/completions。",
     );
   }
-  const signal = AbortSignal.timeout(60_000);
+  if (
+    input.options?.thinking &&
+    input.options.thinking !== "auto" &&
+    !supportsBridgeThinking(baseUrl, input.model)
+  ) {
+    return failure(
+      "unsupported_thinking",
+      "此接口或模型尚未验证思考模式控制，请选择「服务商默认」。",
+    );
+  }
+  const timeoutSeconds = input.options?.timeoutSeconds ?? 60;
+  const signal = AbortSignal.timeout(timeoutSeconds * 1000);
   try {
-    const response = await proxyFetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      redirect: "error",
-      signal,
-      headers: {
-        Authorization: `Bearer ${input.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: input.model,
-        messages: [{ role: "user", content: "Reply with only OK." }],
-        max_tokens: 128,
-        stream: false,
-      }),
-    });
+    let response: Response | undefined;
+    const retries = input.options?.retries ?? 0;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        response = await proxyFetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          redirect: "error",
+          signal,
+          headers: {
+            Authorization: `Bearer ${input.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: input.model,
+            messages: [{ role: "user", content: "Reply with only OK." }],
+            max_tokens:
+              input.options && input.options.thinking !== "off" ? 4096 : 128,
+            stream: false,
+            ...bridgeThinkingPayload(input.options?.thinking),
+          }),
+        });
+      } catch (error) {
+        if (signal.aborted || attempt === retries) throw error;
+      }
+      if (
+        response &&
+        ![408, 409, 429, 500, 502, 503, 504].includes(response.status)
+      )
+        break;
+      if (attempt === retries) break;
+      await response?.body?.cancel();
+      response = undefined;
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(
+          () => {
+            signal.removeEventListener("abort", abort);
+            resolve();
+          },
+          500 * (attempt + 1),
+        );
+        const abort = () => {
+          clearTimeout(timer);
+          reject(signal.reason);
+        };
+        signal.addEventListener("abort", abort, { once: true });
+        if (signal.aborted) abort();
+      });
+    }
+    if (!response) throw new Error("No response");
     if (!response.ok) {
       const code = response.status;
       await response.body?.cancel();
@@ -119,7 +174,7 @@ export async function testBridgeModel(
     return failure(
       signal.aborted ? "timeout" : "network",
       signal.aborted
-        ? "模型测试超过 60 秒，请检查网络或更换模型后重试。"
+        ? `模型测试超过 ${timeoutSeconds} 秒，请检查网络或更换模型后重试。`
         : "未能取得有效回答，请检查网络、代理和接口地址后重试。",
     );
   }

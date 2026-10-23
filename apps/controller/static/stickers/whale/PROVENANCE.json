@@ -1,0 +1,48 @@
+{
+  "assets": [
+    {
+      "file": "meal.png",
+      "sourceFile": "001",
+      "issue": "https://github.com/lmy414/ai-girl-stickers/issues/7",
+      "sha256": "925e3c3f7157e1d85f4379862b7c0c21daf8f3015bec28d44688a2b7e4dc9de9",
+      "bytes": 2227768
+    },
+    {
+      "file": "hello.png",
+      "sourceFile": "007",
+      "issue": "https://github.com/lmy414/ai-girl-stickers/issues/7",
+      "sha256": "050d8f95ecf844edf7e564c9a86613fbeaaa5d964f6e86c0b2119e07b72a0bff",
+      "bytes": 2105968
+    },
+    {
+      "file": "rest.png",
+      "sourceFile": "009",
+      "issue": "https://github.com/lmy414/ai-girl-stickers/issues/7",
+      "sha256": "a5051bf01a700be27b65a5529c1099db4e6ee27cb3a2093e41a807391aba840d",
+      "bytes": 2234751
+    },
+    {
+      "file": "hungry.png",
+      "sourceFile": "010",
+      "issue": "https://github.com/lmy414/ai-girl-stickers/issues/7",
+      "sha256": "93a9725f28d03ac5dd59891d4e5a683fe898aa448e669bc430f2ef50a05a87ce",
+      "bytes": 2149070
+    },
+    {
+      "file": "not-full.webp",
+      "source": "User-provided attachment, explicitly requested for inclusion and Git push on 2026-10-23",
+      "sourceFile": "codex-clipboard-72b0ff84-3e01-4eea-881f-459a5a9e0655.webp",
+      "license": "Not supplied; not covered by the other images CC0 submission",
+      "sha256": "873e1c4870724a11f02fa08a2f97c2d0c7e004610093066b3135b548a8fe31df",
+      "bytes": 49464
+    }
+  ],
+  "submissions": [
+    {
+      "number": 7,
+      "title": "[投稿]  一些肥鱼",
+      "author": "MX1951",
+      "body": "### 图片名称\n\n一些肥鱼\n\n### 一句话说明（可选）\n\n_No response_\n\n### 角色\n\nDeepSeek娘（deepseek · 别名 蓝色大肥鱼 / 鲸鱼娘）\n\n### 角色补充（只在上一题选了「其他角色」时填写）\n\n_No response_\n\n### Tag\n\n大肥鱼 开源 吃饭 JK\n\n### 图片文件\n\n<img width=\"1086\" height=\"1448\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/aaf4fbc7-a5eb-4c3e-82cd-8e220726b987\" />\n<img width=\"1086\" height=\"1448\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/d9363e9a-0284-45d8-a26c-58efd0f0e5d2\" />\n<img width=\"1024\" height=\"1536\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/5c1ec50a-f265-4d10-9c12-fd455c35d9ec\" />\n<img width=\"1024\" height=\"1536\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/6b0f599b-c82d-40c7-9b07-c8af00a1ceff\" />\n<img width=\"1024\" height=\"1536\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/54f90a8a-d421-4dc3-ad74-912cab4e9045\" />\n<img width=\"1448\" height=\"1086\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/0dc48ae8-603d-4e13-856f-94a0fb5906f2\" />\n<img width=\"1086\" height=\"1448\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/b99fa43e-a26d-4bbe-a9b5-edf6527c119d\" />\n<img width=\"1402\" height=\"1122\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/43bc5e66-5e5a-45e4-8521-41cb41bff1df\" />\n<img width=\"1086\" height=\"1448\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/b582d7b9-4ef9-4b54-b184-a2043b005a1d\" />\n<img width=\"1086\" height=\"1448\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/b18cb22d-85bd-4e8e-bc31-d701ac64534f\" />\n<img width=\"1086\" height=\"1448\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/30921e23-b8c0-49dd-9135-4f51deb57f18\" />\n<img width=\"1168\" height=\"1346\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/2fb292f6-1d5a-4948-82c0-31e8dc582a01\" />\n<img width=\"1254\" height=\"1254\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/e31214ea-731d-4724-a70d-ca0178f687d1\" />\n\n### 内容来源\n\n自己创作或生成（self-created）\n\n### 来源作者\n\n@MX1951\n\n### 来源链接（可选）\n\n_No response_\n\n### 授权状态\n\nCC0 公共领域（cc0）\n\n### 授权说明\n\n_No response_\n\n### 确认\n\n- [x] 我确认自己有权提交这张图片，或已获得原作者允许。\n- [x] 我同意维护者核实后收录到蓝色大肥鱼，并在收到版权要求时修改信息或删除。\n- [x] 我知道本站是非官方同人整理项目，图片著作权始终归原作者。"
+    }
+  ]
+}

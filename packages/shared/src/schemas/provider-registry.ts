@@ -39,7 +39,9 @@ export const providerRegistryResponseSchema = z.object({
 });
 
 export const modelProviderConfigDocumentEnvelopeSchema = z.object({
-  config: persistedModelsConfigSchema,
+  config: persistedModelsConfigSchema.describe(
+    "API keys are replaced by __BRIDGE_SAVED_API_KEY__. Return that marker unchanged to retain the same provider's local key; supply a new key when changing its base URL.",
+  ),
 });
 
 export type ProviderRegistryEntryDto = z.infer<

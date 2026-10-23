@@ -149,11 +149,16 @@ export function registerBridgeContactRoutes(
       try {
         const profile = await serialize(async () => {
           const current = await readContactProfile(root, id);
-          return saveContactProfile(root, id, {
-            ...current.settings,
-            memories: [],
-            memoryEnabled: false,
-          });
+          return saveContactProfile(
+            root,
+            id,
+            {
+              ...current.settings,
+              memories: [],
+              memoryEnabled: false,
+            },
+            true,
+          );
         });
         return c.json(profile, 200);
       } catch {

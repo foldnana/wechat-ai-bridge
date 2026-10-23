@@ -8,12 +8,14 @@ import { createApp } from "#controller/app/create-app";
 import {
   behaviorSchema,
   decodeSticker,
+  readStickers,
   writeBridgeJson,
 } from "#controller/services/bridge-behavior";
 import {
   contactSettingsSchema,
   saveContactProfile,
 } from "#controller/services/bridge-contacts";
+import { ensureDefaultStickers } from "#controller/services/bridge-default-stickers";
 import { BridgeProactive } from "../../apps/controller/static/runtime-plugins/openclaw-weixin/src/messaging/bridge-proactive";
 import {
   bridgeHash,
@@ -76,8 +78,9 @@ describe("behavior preferences and managed sticker library", () => {
   });
   it("defaults to no stickers and no proactive messages, with bounded settings", () => {
     expect(behaviorSchema.parse({})).toMatchObject({
-      persona: "auto",
-      incoming: { waitMs: 12000 },
+      persona: "whale",
+      incoming: { mode: "auto", waitMs: 4000 },
+      delivery: { mode: "natural", maxBubbles: 2 },
       stickers: { enabled: false },
       proactive: { enabled: false },
     });
@@ -131,6 +134,7 @@ describe("behavior preferences and managed sticker library", () => {
     ).toBe(200);
     expect(loadBehavior()?.accountHashes).toEqual([bridgeHash(account)]);
     expect(loadBehavior()?.incoming.waitMs).toBe(20000);
+    expect(loadBehavior()?.incoming.mode).toBe("fixed");
     expect(loadBehavior()?.delivery).toEqual({
       mode: "natural",
       maxBubbles: 3,
@@ -189,7 +193,11 @@ describe("behavior preferences and managed sticker library", () => {
       body: JSON.stringify({ label: "开心", tags: "庆祝、赞同", data }),
     });
     expect(response.status).toBe(200);
-    const [item] = await response.json();
+    const items = await response.json();
+    const item = items.find(
+      (entry: { label: string }) => entry.label === "开心",
+    );
+    expect(items).toHaveLength(6);
     expect(item).toMatchObject({ extension: "png", label: "开心" });
     const preview = await app.request(
       `/api/v1/bridge/stickers/${item.id}/image`,
@@ -212,7 +220,204 @@ describe("behavior preferences and managed sticker library", () => {
     expect(
       (await app.request(`/api/v1/bridge/stickers/${item.id}/image`)).status,
     ).toBe(404);
-    expect(await readdir(path.join(root, "bridge-stickers"))).toEqual([]);
+    const files = await readdir(path.join(root, "bridge-stickers"));
+    expect(files).toHaveLength(5);
+    expect(files).not.toContain(`${item.id}.png`);
+  });
+  it("adds bundled pictures once, serves bundled images, and respects a user's deletion", async () => {
+    const { root } = await setup();
+    const app = createApp({
+      env: { openclawStateDir: root, webUrl: "http://localhost:5173" },
+      channelService: { listChannels: async () => [] },
+    } as unknown as ControllerContainer);
+    const response = await app.request("/api/v1/bridge/stickers");
+    expect(response.status).toBe(200);
+    const items = await response.json();
+    expect(items.map((item: { label: string }) => item.label)).toEqual([
+      "大肥鱼·吃饭时间",
+      "大肥鱼·你好呀",
+      "大肥鱼·歇一会儿",
+      "大肥鱼·吃什么呢",
+      "大肥鱼·没吃饱喵",
+    ]);
+    for (const item of items) {
+      const preview = await app.request(
+        `/api/v1/bridge/stickers/${item.id}/image`,
+      );
+      expect(preview.status).toBe(200);
+      const bytes = Buffer.from(await preview.arrayBuffer());
+      expect(preview.headers.get("content-type")).toBe(
+        `image/${item.extension}`,
+      );
+      if (item.extension === "webp") {
+        expect(
+          decodeSticker(`data:image/webp;base64,${bytes.toString("base64")}`)
+            .extension,
+        ).toBe("webp");
+      } else {
+        // Original bundled PNGs may exceed the user-upload limit of 2 MB.
+        expect(bytes.subarray(0, 8)).toEqual(
+          Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+        );
+      }
+    }
+    expect(loadBehavior()?.stickers.enabled).toBe(false);
+    expect(
+      (
+        await app.request(`/api/v1/bridge/stickers/${items[0].id}`, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(200);
+    expect(await ensureDefaultStickers(root)).toHaveLength(4);
+    expect(await readStickers(root)).not.toContainEqual(items[0]);
+  });
+  it("keeps existing stickers and the 24-image limit, including after capacity is freed", async () => {
+    const { root } = await setup();
+    const existing = Array.from({ length: 23 }, (_, i) => ({
+      id: randomUUID(),
+      label: `自选 ${i}`,
+      tags: "开心",
+      extension: "png",
+    }));
+    await writeBridgeJson(root, "bridge-stickers.json", existing);
+    const items = await ensureDefaultStickers(root);
+    expect(items).toHaveLength(24);
+    expect(items.slice(0, 23)).toEqual(existing);
+    await writeBridgeJson(root, "bridge-stickers.json", items.slice(1));
+    expect(await ensureDefaultStickers(root)).toHaveLength(23);
+  });
+  it("does not overwrite a damaged user library with defaults", async () => {
+    const { root } = await setup();
+    await writeFile(path.join(root, "bridge-stickers.json"), "{broken");
+    await expect(ensureDefaultStickers(root)).rejects.toThrow(
+      "表情图库无法读取",
+    );
+    expect(
+      await readFile(path.join(root, "bridge-stickers.json"), "utf8"),
+    ).toBe("{broken");
+  });
+  it("replaces retired defaults on upgrade without deleting user imports", async () => {
+    const { root } = await setup();
+    await ensureDefaultStickers(root);
+    const retired = [1, 2, 3, 4].map((n) => ({
+      id: `9c786dee-6910-41fc-a269-55d79487910${n}`,
+      label: "旧默认表情",
+      tags: "旧图库",
+      extension: "png",
+    }));
+    const personal = {
+      id: randomUUID(),
+      label: "我的表情",
+      tags: "个人",
+      extension: "png",
+    };
+    for (const item of [...retired, personal]) {
+      await writeFile(
+        path.join(root, "bridge-stickers", `${item.id}.png`),
+        "keep-or-retire",
+      );
+    }
+    await rm(path.join(root, "bridge-whale-stickers-v4.json"));
+    await writeBridgeJson(root, "bridge-whale-stickers-v1.json", {
+      version: 1,
+    });
+    await writeBridgeJson(root, "bridge-stickers.json", [...retired, personal]);
+    const upgraded = await ensureDefaultStickers(root);
+    expect(upgraded).toHaveLength(6);
+    expect(upgraded).toContainEqual(personal);
+    expect(
+      upgraded.some((item) => retired.some((old) => old.id === item.id)),
+    ).toBe(false);
+    for (const old of retired) {
+      await expect(
+        readFile(path.join(root, "bridge-stickers", `${old.id}.png`)),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+    }
+    expect(
+      await readFile(
+        path.join(root, "bridge-stickers", `${personal.id}.png`),
+        "utf8",
+      ),
+    ).toBe("keep-or-retire");
+    expect(await ensureDefaultStickers(root)).toHaveLength(6);
+  });
+  it("removes rejected v2 art without restoring deleted images or removing user imports", async () => {
+    const { root } = await setup();
+    const defaults = await ensureDefaultStickers(root);
+    const rejected = [1, 2, 3, 4].map((n) => ({
+      id: `9c786dee-6910-41fc-a269-55d79487920${n}`,
+      label: "被否定的 Q 版",
+      tags: "旧图库",
+      extension: "webp",
+    }));
+    const personal = {
+      id: randomUUID(),
+      label: "自选",
+      tags: "开心",
+      extension: "png",
+    };
+    await rm(path.join(root, "bridge-whale-stickers-v4.json"));
+    await writeBridgeJson(root, "bridge-whale-stickers-v2.json", {
+      version: 2,
+    });
+    await writeBridgeJson(root, "bridge-stickers.json", [
+      ...defaults.slice(1),
+      ...rejected,
+      personal,
+    ]);
+    for (const item of rejected) {
+      await writeFile(
+        path.join(root, "bridge-stickers", `${item.id}.webp`),
+        "retired",
+      );
+    }
+    const expected = [...defaults.slice(1), personal];
+    expect(await ensureDefaultStickers(root)).toEqual(expected);
+    expect(await ensureDefaultStickers(root)).toEqual(expected);
+    for (const item of rejected) {
+      await expect(
+        readFile(path.join(root, "bridge-stickers", `${item.id}.webp`)),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+    }
+  });
+  it.each([2, 3])(
+    "adds the supplied image once when upgrading v%s and preserves deletions",
+    async (version) => {
+      const { root } = await setup();
+      const defaults = await ensureDefaultStickers(root);
+      const added = defaults.find((item) => item.label === "大肥鱼·没吃饱喵");
+      expect(added).toBeDefined();
+      const previous = defaults.filter((item) => item !== added).slice(1);
+      await rm(path.join(root, "bridge-whale-stickers-v4.json"));
+      await writeBridgeJson(root, `bridge-whale-stickers-v${version}.json`, {
+        version,
+      });
+      await writeBridgeJson(root, "bridge-stickers.json", previous);
+      expect(await ensureDefaultStickers(root)).toEqual([...previous, added]);
+      await writeBridgeJson(root, "bridge-stickers.json", previous);
+      expect(await ensureDefaultStickers(root)).toEqual(previous);
+    },
+  );
+  it("rejects forged WebP and permits imported WebP in the runtime selector", async () => {
+    expect(() =>
+      decodeSticker(
+        `data:image/webp;base64,${Buffer.from("not a WebP picture").toString("base64")}`,
+      ),
+    ).toThrow();
+    const { root, config, now } = await setup();
+    const item = {
+      id: randomUUID(),
+      label: "自选 WebP",
+      tags: "开心",
+      extension: "webp",
+    };
+    await writeBridgeJson(root, "bridge-stickers.json", [item]);
+    config.stickers = { enabled: true, probability: 100, cooldownMinutes: 1 };
+    await writeBridgeJson(root, "bridge-behavior.json", config);
+    expect(
+      chooseSticker(`[[sticker:${item?.id}]]`, randomUUID(), now(), () => 0),
+    ).toBe(path.join(root, "bridge-stickers", `${item?.id}.webp`));
   });
   it("restricts model markers to imported IDs and enforces probability, pause and cooldown", async () => {
     const { root, config, now } = await setup();
